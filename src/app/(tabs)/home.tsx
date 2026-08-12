@@ -1,9 +1,10 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth-context";
-import { ProfileCompletionBanner } from "@/components/profile-completion-banner";
+import { ProfileCompletionCard } from "@/components/profile-completion-card";
 import { ShiftToggle } from "@/components/shift-toggle";
-import { ScreenCard } from "@/components/screen-card";
+import { NavTile } from "@/components/nav-tile";
+import { HomeAvailabilityTile } from "@/components/home-availability-tile";
 
 export default function HomeScreen() {
   const { driver, signOut } = useAuth();
@@ -19,17 +20,19 @@ export default function HomeScreen() {
             <Text className="text-2xl font-bold text-slate-900">{driver.full_name}</Text>
           </View>
           <Pressable onPress={() => signOut()}>
-            <Text className="text-sm font-medium text-indigo-600">Sign out</Text>
+            <Text className="text-sm font-medium text-amber-600">Sign out</Text>
           </Pressable>
         </View>
 
-        {driver.profile_status === "pending" && <ProfileCompletionBanner />}
+        <ProfileCompletionCard driver={driver} />
 
         <ShiftToggle driver={driver} />
 
-        <ScreenCard title="Availability" subtitle="Submit your in/off days for the current request" href="/(tabs)/availability" />
-        <ScreenCard title="Payroll" subtitle="This week's pay and your payslip history" href="/(tabs)/payroll" />
-        <ScreenCard title="Performance" subtitle="Your weekly score, tier and rank" href="/(tabs)/performance" />
+        <View className="mt-2 flex-row flex-wrap justify-between gap-y-3">
+          <HomeAvailabilityTile />
+          <NavTile icon="credit-card" label="Payroll" subtitle="This week's pay & history" href="/(tabs)/payroll" />
+          <NavTile icon="bar-chart-2" label="Performance" subtitle="Score, tier & rank" href="/(tabs)/performance" />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

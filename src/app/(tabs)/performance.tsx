@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import type { PerformanceWeeklyDriver } from "@/types/performance";
@@ -33,7 +34,7 @@ export default function PerformanceScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator size="large" color="#4f46e5" />
+        <ActivityIndicator size="large" color="#f59e0b" />
       </SafeAreaView>
     );
   }
@@ -50,18 +51,23 @@ export default function PerformanceScreen() {
         <Text className="mb-4 text-2xl font-bold text-slate-900">Performance</Text>
 
         {!current ? (
-          <Text className="text-slate-500">No performance data yet.</Text>
+          <View className="items-center rounded-xl border border-slate-200 bg-slate-50 py-8">
+            <Text className="text-sm text-slate-500">No performance data yet.</Text>
+          </View>
         ) : (
-          <View className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Week {current.week_number} · {current.year}
-            </Text>
-            <Text className="mt-1 text-4xl font-bold text-slate-900">{current.total_score?.toFixed(1) ?? "--"}</Text>
-            {current.rating_tier && (
-              <Text className="mt-1 text-base font-semibold text-indigo-600">{current.rating_tier}</Text>
-            )}
+          <View className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <View className="bg-slate-900 px-5 py-4">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Week {current.week_number} · {current.year}
+              </Text>
+              <Text className="mt-1 text-4xl font-bold text-amber-400">{current.total_score?.toFixed(1) ?? "--"}</Text>
+              {current.rating_tier && <Text className="mt-1 text-base font-semibold text-white">{current.rating_tier}</Text>}
+            </View>
             {current.weekly_rank && (
-              <Text className="mt-2 text-sm text-slate-500">Ranked #{current.weekly_rank} at your site this week</Text>
+              <View className="flex-row items-center gap-2 px-5 py-3">
+                <Feather name="award" size={14} color="#f59e0b" />
+                <Text className="text-sm text-slate-600">Ranked #{current.weekly_rank} at your site this week</Text>
+              </View>
             )}
           </View>
         )}

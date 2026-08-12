@@ -84,15 +84,20 @@ export default function CompleteProfileScreen() {
     if (!driver) return;
     setError(null);
 
+    // Matches PROFILE_REQUIRED_FIELDS in lib/profile-completion.ts, minus
+    // "phone" (admin-set at driver creation, not edited on this screen).
     const required: (keyof FormState)[] = [
       "date_of_birth",
-      "nationality",
       "address_line1",
       "city",
       "postcode",
       "emergency_contact",
       "emergency_phone",
       "ni_number",
+      "utr_number",
+      "bank_account_name",
+      "bank_sort_code",
+      "bank_account_number",
     ];
     const missing = required.find((key) => !form[key]);
     if (missing) {
@@ -184,7 +189,7 @@ export default function CompleteProfileScreen() {
         <Pressable
           onPress={handleSubmit}
           disabled={submitting}
-          className="mt-2 items-center rounded-lg bg-indigo-600 py-3 disabled:opacity-50"
+          className="mt-2 items-center rounded-lg bg-slate-900 py-3 disabled:opacity-50"
         >
           {submitting ? <ActivityIndicator color="white" /> : <Text className="font-semibold text-white">Save & Continue</Text>}
         </Pressable>
