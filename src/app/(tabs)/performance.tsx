@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
@@ -10,17 +10,26 @@ export default function PerformanceScreen() {
   const { driver } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [weeks, setWeeks] = useState<PerformanceWeeklyDriver[]>([]);
 
   const load = useCallback(async () => {
     if (!driver) return;
-    const { data } = await supabase
+    setLoadError(null);
+    const { data, error } = await supabase
       .from("performance_weekly_driver")
       .select("*")
       .eq("driver_id", driver.id)
       .order("year", { ascending: false })
       .order("week_number", { ascending: false })
       .limit(20);
+
+    if (error) {
+      setLoadError("Couldn't load your performance data. Check your connection and try again.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     setWeeks((data as PerformanceWeeklyDriver[]) ?? []);
     setLoading(false);
@@ -35,6 +44,18 @@ export default function PerformanceScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator size="large" color="#f59e0b" />
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-slate-50 px-6">
+        <Feather name="alert-triangle" size={22} color="#dc2626" />
+        <Text className="mt-3 text-center text-sm font-semibold text-red-700">{loadError}</Text>
+        <Pressable onPress={() => { setLoading(true); load(); }} className="mt-4 rounded-lg bg-slate-900 px-4 py-2">
+          <Text className="text-sm font-semibold text-white">Retry</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }

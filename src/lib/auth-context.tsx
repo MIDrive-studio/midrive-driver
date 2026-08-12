@@ -8,6 +8,7 @@ type AuthContextValue = {
   loading: boolean;
   isSignedIn: boolean;
   driver: Driver | null;
+  driverError: string | null;
   reloadDriver: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -16,19 +17,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { session, loading: sessionLoading } = useSession();
-  const { driver, loading: driverLoading, reload } = useDriver(session?.user.id);
+  const { driver, loading: driverLoading, error: driverError, reload } = useDriver(session?.user.id);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       loading: sessionLoading || (Boolean(session) && driverLoading),
       isSignedIn: Boolean(session),
       driver,
+      driverError,
       reloadDriver: reload,
       signOut: async () => {
         await supabase.auth.signOut();
       },
     }),
-    [session, sessionLoading, driver, driverLoading, reload]
+    [session, sessionLoading, driver, driverError, driverLoading, reload]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

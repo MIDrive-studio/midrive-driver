@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -9,21 +9,25 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
+
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
 
   async function handleSignIn() {
     setError(null);
 
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setError("Enter your email and password.");
       return;
     }
 
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
     setSubmitting(false);
 
     if (signInError) {
-      setError(signInError.message);
+      setError(signInError.message === "Invalid login credentials" ? "Incorrect email or password." : signInError.message);
     }
     // On success, the root layout's redirect effect takes over.
   }
@@ -52,20 +56,33 @@ export default function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
               autoComplete="email"
+              textContentType="emailAddress"
               keyboardType="email-address"
               placeholder="you@example.com"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
+              editable={!submitting}
               className="mb-4 rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
             />
 
             <Text className="mb-1 text-sm font-medium text-slate-700">Password</Text>
             <View className="mb-6 flex-row items-center rounded-lg border border-slate-300 bg-white pr-3">
               <TextInput
+                ref={passwordRef}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
                 autoComplete="password"
+                textContentType="password"
                 placeholder="••••••••"
+                returnKeyType="go"
+                onSubmitEditing={handleSignIn}
+                editable={!submitting}
                 className="flex-1 px-4 py-3 text-slate-900"
               />
               <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
@@ -75,7 +92,7 @@ export default function LoginScreen() {
 
             <Pressable
               onPress={handleSignIn}
-              disabled={submitting}
+              disabled={!canSubmit}
               className="h-11 items-center justify-center rounded-lg bg-slate-900 disabled:opacity-50"
             >
               {submitting ? <ActivityIndicator color="white" /> : <Text className="text-base font-semibold text-white">Sign In</Text>}

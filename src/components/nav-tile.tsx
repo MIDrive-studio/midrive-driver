@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 

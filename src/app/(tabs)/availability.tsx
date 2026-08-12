@@ -10,6 +10,7 @@ export default function AvailabilityScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [daysOffAvailableMap, setDaysOffAvailableMap] = useState<Record<string, number>>({});
@@ -18,11 +19,11 @@ export default function AvailabilityScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
-    setError(null);
+    setLoadError(null);
     const { data, error: invokeError } = await supabase.functions.invoke<AvailabilityStatusResponse>("availability-status");
 
     if (invokeError) {
-      setError(invokeError.message);
+      setLoadError("Couldn't load your availability request. Check your connection and try again.");
       setLoading(false);
       setRefreshing(false);
       return;
@@ -110,7 +111,15 @@ export default function AvailabilityScreen() {
           </View>
         )}
 
-        {!requestId ? (
+        {loadError ? (
+          <View className="mt-6 items-center rounded-xl border border-red-200 bg-red-50 py-10 px-6">
+            <Feather name="alert-triangle" size={22} color="#dc2626" />
+            <Text className="mt-3 text-center text-sm font-semibold text-red-700">{loadError}</Text>
+            <Pressable onPress={() => load()} className="mt-4 rounded-lg bg-slate-900 px-4 py-2">
+              <Text className="text-sm font-semibold text-white">Retry</Text>
+            </Pressable>
+          </View>
+        ) : !requestId ? (
           <View className="mt-6 items-center rounded-xl border border-slate-200 bg-white py-10">
             <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-slate-100">
               <Feather name="check-circle" size={22} color="#94a3b8" />

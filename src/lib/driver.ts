@@ -5,16 +5,19 @@ import type { Driver } from "@/types/driver";
 export function useDriver(userId: string | undefined) {
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!userId) {
       setDriver(null);
+      setError(null);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const { data } = await supabase.from("drivers").select("*").eq("user_id", userId).maybeSingle();
+    const { data, error: fetchError } = await supabase.from("drivers").select("*").eq("user_id", userId).maybeSingle();
     setDriver(data as Driver | null);
+    setError(fetchError?.message ?? null);
     setLoading(false);
   }, [userId]);
 
@@ -22,5 +25,5 @@ export function useDriver(userId: string | undefined) {
     reload();
   }, [reload]);
 
-  return { driver, loading, reload };
+  return { driver, loading, error, reload };
 }

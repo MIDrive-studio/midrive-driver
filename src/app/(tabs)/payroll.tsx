@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
@@ -12,18 +12,27 @@ export default function PayrollScreen() {
   const { driver } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [currentWeek, setCurrentWeek] = useState<PayrollWeeklyDriver | null>(null);
   const [payslips, setPayslips] = useState<DriverPayslip[]>([]);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!driver) return;
+    setLoadError(null);
     const { year, week } = weekOf(todayISODate());
 
     const [weeklyRes, payslipsRes] = await Promise.all([
       supabase.from("payroll_weekly_driver").select("*").eq("driver_id", driver.id).eq("year", year).eq("week", week).maybeSingle(),
       supabase.from("driver_payslips").select("*").eq("driver_id", driver.id).order("year", { ascending: false }).order("week", { ascending: false }),
     ]);
+
+    if (weeklyRes.error || payslipsRes.error) {
+      setLoadError("Couldn't load your payroll data. Check your connection and try again.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     setCurrentWeek((weeklyRes.data as PayrollWeeklyDriver | null) ?? null);
     setPayslips((payslipsRes.data as DriverPayslip[]) ?? []);
@@ -38,10 +47,12 @@ export default function PayrollScreen() {
   async function openPayslip(payslip: DriverPayslip) {
     if (!payslip.pdf_path) return;
     setOpeningId(payslip.id);
-    const { data } = await supabase.storage.from("driver-payslips").createSignedUrl(payslip.pdf_path, 60);
+    const { data, error } = await supabase.storage.from("driver-payslips").createSignedUrl(payslip.pdf_path, 60);
     setOpeningId(null);
     if (data?.signedUrl) {
       await WebBrowser.openBrowserAsync(data.signedUrl);
+    } else {
+      Alert.alert("Couldn't open payslip", error?.message ?? "Please try again.");
     }
   }
 
@@ -49,6 +60,18 @@ export default function PayrollScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator size="large" color="#f59e0b" />
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-slate-50 px-6">
+        <Feather name="alert-triangle" size={22} color="#dc2626" />
+        <Text className="mt-3 text-center text-sm font-semibold text-red-700">{loadError}</Text>
+        <Pressable onPress={() => { setLoading(true); load(); }} className="mt-4 rounded-lg bg-slate-900 px-4 py-2">
+          <Text className="text-sm font-semibold text-white">Retry</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }

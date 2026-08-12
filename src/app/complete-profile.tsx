@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import type { DriverProfileUpdate } from "@/types/driver";
@@ -25,23 +26,22 @@ type FormState = {
   bank_account_number: string;
 };
 
-const emptyForm: FormState = {
-  date_of_birth: "",
-  nationality: "",
-  address_line1: "",
-  address_line2: "",
-  city: "",
-  postcode: "",
-  emergency_contact: "",
-  emergency_phone: "",
-  utr_number: "",
-  ni_number: "",
-  vat_registered: false,
-  vat_number: "",
-  bank_account_name: "",
-  bank_sort_code: "",
-  bank_account_number: "",
-};
+// Required (label, form key) pairs -- keys match PROFILE_REQUIRED_FIELDS in
+// lib/profile-completion.ts, minus "phone" (admin-set at driver creation,
+// not edited here).
+const REQUIRED: { key: keyof FormState; label: string }[] = [
+  { key: "date_of_birth", label: "Date of Birth" },
+  { key: "address_line1", label: "Address" },
+  { key: "city", label: "City" },
+  { key: "postcode", label: "Postcode" },
+  { key: "emergency_contact", label: "Emergency Contact Name" },
+  { key: "emergency_phone", label: "Emergency Contact Phone" },
+  { key: "ni_number", label: "National Insurance Number" },
+  { key: "utr_number", label: "UTR Number" },
+  { key: "bank_account_name", label: "Bank Account Name" },
+  { key: "bank_sort_code", label: "Sort Code" },
+  { key: "bank_account_number", label: "Account Number" },
+];
 
 function Field({
   label,
@@ -49,12 +49,16 @@ function Field({
   onChangeText,
   placeholder,
   keyboardType,
+  autoCapitalize,
+  maxLength,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
   keyboardType?: "default" | "numeric" | "phone-pad";
+  autoCapitalize?: "none" | "characters" | "words";
+  maxLength?: number;
 }) {
   return (
     <View className="mb-4">
@@ -64,15 +68,65 @@ function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        maxLength={maxLength}
         className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900"
       />
     </View>
   );
 }
 
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (isoDate: string) => void }) {
+  const [show, setShow] = useState(false);
+  const dateValue = value ? new Date(`${value}T00:00:00Z`) : new Date(2000, 0, 1);
+
+  function handleChange(event: DateTimePickerEvent, selected?: Date) {
+    if (Platform.OS === "android") setShow(false);
+    if (event.type === "dismissed" || !selected) return;
+    onChange(selected.toISOString().slice(0, 10));
+  }
+
+  const displayValue = value
+    ? new Date(`${value}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
+    : null;
+
+  return (
+    <View className="mb-4">
+      <Text className="mb-1 text-sm font-medium text-slate-700">{label}</Text>
+      <Pressable onPress={() => setShow(true)} className="rounded-lg border border-slate-300 bg-white px-4 py-3">
+        <Text className={displayValue ? "text-slate-900" : "text-slate-400"}>{displayValue ?? "Select date"}</Text>
+      </Pressable>
+      {show && (
+        <DateTimePicker value={dateValue} mode="date" display={Platform.OS === "ios" ? "spinner" : "default"} maximumDate={new Date()} onChange={handleChange} />
+      )}
+      {show && Platform.OS === "ios" && (
+        <Pressable onPress={() => setShow(false)} className="mt-1 self-end">
+          <Text className="text-sm font-medium text-amber-600">Done</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 export default function CompleteProfileScreen() {
   const { driver, reloadDriver } = useAuth();
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => ({
+    date_of_birth: driver?.date_of_birth ?? "",
+    nationality: driver?.nationality ?? "",
+    address_line1: driver?.address_line1 ?? "",
+    address_line2: driver?.address_line2 ?? "",
+    city: driver?.city ?? "",
+    postcode: driver?.postcode ?? "",
+    emergency_contact: driver?.emergency_contact ?? "",
+    emergency_phone: driver?.emergency_phone ?? "",
+    utr_number: driver?.utr_number ?? "",
+    ni_number: driver?.ni_number ?? "",
+    vat_registered: driver?.vat_registered ?? false,
+    vat_number: driver?.vat_number ?? "",
+    bank_account_name: driver?.bank_account_name ?? "",
+    bank_sort_code: driver?.bank_sort_code ?? "",
+    bank_account_number: driver?.bank_account_number ?? "",
+  }));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,24 +138,9 @@ export default function CompleteProfileScreen() {
     if (!driver) return;
     setError(null);
 
-    // Matches PROFILE_REQUIRED_FIELDS in lib/profile-completion.ts, minus
-    // "phone" (admin-set at driver creation, not edited on this screen).
-    const required: (keyof FormState)[] = [
-      "date_of_birth",
-      "address_line1",
-      "city",
-      "postcode",
-      "emergency_contact",
-      "emergency_phone",
-      "ni_number",
-      "utr_number",
-      "bank_account_name",
-      "bank_sort_code",
-      "bank_account_number",
-    ];
-    const missing = required.find((key) => !form[key]);
-    if (missing) {
-      setError("Please fill in all required fields.");
+    const missing = REQUIRED.filter(({ key }) => !form[key]);
+    if (missing.length > 0) {
+      setError(`Please fill in: ${missing.map((m) => m.label).join(", ")}.`);
       return;
     }
 
@@ -157,34 +196,34 @@ export default function CompleteProfileScreen() {
         )}
 
         <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Personal</Text>
-        <Field label="Date of Birth (YYYY-MM-DD)" value={form.date_of_birth} onChangeText={(v) => set("date_of_birth", v)} placeholder="1990-01-31" />
-        <Field label="Nationality" value={form.nationality} onChangeText={(v) => set("nationality", v)} />
+        <DateField label="Date of Birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+        <Field label="Nationality" value={form.nationality} onChangeText={(v) => set("nationality", v)} autoCapitalize="words" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Address</Text>
-        <Field label="Address Line 1" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} />
-        <Field label="Address Line 2" value={form.address_line2} onChangeText={(v) => set("address_line2", v)} />
-        <Field label="City" value={form.city} onChangeText={(v) => set("city", v)} />
-        <Field label="Postcode" value={form.postcode} onChangeText={(v) => set("postcode", v)} />
+        <Field label="Address Line 1" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} autoCapitalize="words" />
+        <Field label="Address Line 2" value={form.address_line2} onChangeText={(v) => set("address_line2", v)} autoCapitalize="words" />
+        <Field label="City" value={form.city} onChangeText={(v) => set("city", v)} autoCapitalize="words" />
+        <Field label="Postcode" value={form.postcode} onChangeText={(v) => set("postcode", v.toUpperCase())} autoCapitalize="characters" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency Contact</Text>
-        <Field label="Contact Name" value={form.emergency_contact} onChangeText={(v) => set("emergency_contact", v)} />
+        <Field label="Contact Name" value={form.emergency_contact} onChangeText={(v) => set("emergency_contact", v)} autoCapitalize="words" />
         <Field label="Contact Phone" value={form.emergency_phone} onChangeText={(v) => set("emergency_phone", v)} keyboardType="phone-pad" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
-        <Field label="UTR Number" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" />
-        <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v)} />
+        <Field label="UTR Number" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
+        <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v.toUpperCase())} autoCapitalize="characters" maxLength={9} />
 
         <View className="mb-4 flex-row items-center justify-between">
           <Text className="text-sm font-medium text-slate-700">VAT Registered</Text>
-          <Switch value={form.vat_registered} onValueChange={(v) => set("vat_registered", v)} />
+          <Switch value={form.vat_registered} onValueChange={(v) => set("vat_registered", v)} trackColor={{ true: "#f59e0b" }} />
         </View>
         {form.vat_registered && (
-          <Field label="VAT Number" value={form.vat_number} onChangeText={(v) => set("vat_number", v)} />
+          <Field label="VAT Number" value={form.vat_number} onChangeText={(v) => set("vat_number", v.toUpperCase())} autoCapitalize="characters" />
         )}
 
-        <Field label="Bank Account Name" value={form.bank_account_name} onChangeText={(v) => set("bank_account_name", v)} />
-        <Field label="Sort Code" value={form.bank_sort_code} onChangeText={(v) => set("bank_sort_code", v)} keyboardType="numeric" />
-        <Field label="Account Number" value={form.bank_account_number} onChangeText={(v) => set("bank_account_number", v)} keyboardType="numeric" />
+        <Field label="Bank Account Name" value={form.bank_account_name} onChangeText={(v) => set("bank_account_name", v)} autoCapitalize="words" />
+        <Field label="Sort Code" value={form.bank_sort_code} onChangeText={(v) => set("bank_sort_code", v)} keyboardType="numeric" maxLength={6} />
+        <Field label="Account Number" value={form.bank_account_number} onChangeText={(v) => set("bank_account_number", v)} keyboardType="numeric" maxLength={8} />
 
         <Pressable
           onPress={handleSubmit}
