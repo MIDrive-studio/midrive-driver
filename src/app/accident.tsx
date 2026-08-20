@@ -20,6 +20,7 @@ import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { LocationPicker } from "@/components/location-picker";
 import type { AccidentDraft, AccidentStep, EvidenceItem } from "@/types/accident";
 
 // Reporting an accident, as a sequence of small questions rather than one long
@@ -87,6 +88,7 @@ export default function AccidentScreen() {
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [showPicker, setShowPicker] = useState<"date" | "time" | null>(null);
+  const [locationRequested, setLocationRequested] = useState(false);
 
   const driverId = driver?.id;
 
@@ -116,6 +118,13 @@ export default function AccidentScreen() {
     if (!driverId || !draftChecked || showResume) return;
     AsyncStorage.setItem(DRAFT_KEY(driverId), JSON.stringify(draft)).catch(() => {});
   }, [draft, driverId, draftChecked, showResume]);
+
+  useEffect(() => {
+    if (draft.step !== "location" || locationRequested || draft.latitude != null) return;
+    setLocationRequested(true);
+    captureLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.step, locationRequested, draft.latitude]);
 
   const update = useCallback((patch: Partial<AccidentDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -453,21 +462,28 @@ export default function AccidentScreen() {
                   <View className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                     <Text className="text-sm font-bold text-blue-700">Where did it happen?</Text>
                     <Text className="mt-1 text-xs text-blue-600">
-                      {draft.timeMode === "now"
-                        ? "We'll record your current position as the accident location."
-                        : "Add the address, and capture coordinates if you're at the scene."}
+                      Drag the pin, or tap the map, to mark exactly where the accident happened.
                     </Text>
                   </View>
 
                   {draft.latitude != null && draft.longitude != null ? (
-                    <View className="rounded-lg bg-slate-100 p-3">
-                      <Text className="text-xs font-medium text-slate-500">Captured location</Text>
-                      <Text className="text-sm font-bold text-slate-800">
-                        {draft.latitude.toFixed(5)}, {draft.longitude.toFixed(5)}
-                      </Text>
-                    </View>
+                    <>
+                      <LocationPicker
+                        latitude={draft.latitude}
+                        longitude={draft.longitude}
+                        onChange={(latitude, longitude) => update({ latitude, longitude })}
+                      />
+                      <View className="rounded-lg bg-slate-100 p-3">
+                        <Text className="text-xs font-medium text-slate-500">Selected location</Text>
+                        <Text className="text-sm font-bold text-slate-800">
+                          {draft.latitude.toFixed(5)}, {draft.longitude.toFixed(5)}
+                        </Text>
+                      </View>
+                    </>
                   ) : (
-                    <Text className="text-xs text-slate-500">No coordinates captured yet.</Text>
+                    <Text className="text-xs text-slate-500">
+                      {locating ? "Finding you on the map..." : "No location captured yet."}
+                    </Text>
                   )}
 
                   <Pressable
@@ -477,7 +493,7 @@ export default function AccidentScreen() {
                   >
                     {locating ? <ActivityIndicator size="small" /> : <Feather name="map-pin" size={16} color="#334155" />}
                     <Text className="text-sm font-medium text-slate-700">
-                      {locating ? "Detecting..." : draft.latitude == null ? "Capture my location" : "Re-capture location"}
+                      {locating ? "Detecting..." : draft.latitude == null ? "Capture my location" : "Reset pin to where I am"}
                     </Text>
                   </Pressable>
 
