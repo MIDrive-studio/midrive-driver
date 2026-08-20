@@ -466,24 +466,27 @@ export default function AccidentScreen() {
                     </Text>
                   </View>
 
+                  <LocationPicker
+                    latitude={draft.latitude}
+                    longitude={draft.longitude}
+                    onChange={(latitude, longitude) => update({ latitude, longitude })}
+                  />
+
                   {draft.latitude != null && draft.longitude != null ? (
-                    <>
-                      <LocationPicker
-                        latitude={draft.latitude}
-                        longitude={draft.longitude}
-                        onChange={(latitude, longitude) => update({ latitude, longitude })}
-                      />
-                      <View className="rounded-lg bg-slate-100 p-3">
-                        <Text className="text-xs font-medium text-slate-500">Selected location</Text>
-                        <Text className="text-sm font-bold text-slate-800">
-                          {draft.latitude.toFixed(5)}, {draft.longitude.toFixed(5)}
-                        </Text>
-                      </View>
-                    </>
+                    <View className="rounded-lg bg-slate-100 p-3">
+                      <Text className="text-xs font-medium text-slate-500">Selected location</Text>
+                      <Text className="text-sm font-bold text-slate-800">
+                        {draft.latitude.toFixed(5)}, {draft.longitude.toFixed(5)}
+                      </Text>
+                    </View>
                   ) : (
-                    <Text className="text-xs text-slate-500">
-                      {locating ? "Finding you on the map..." : "No location captured yet."}
-                    </Text>
+                    <View className="rounded-lg bg-amber-50 p-3">
+                      <Text className="text-xs text-amber-700">
+                        {locating
+                          ? "Finding you on the map..."
+                          : "No pin placed yet — tap the map where the accident happened, or use the button below."}
+                      </Text>
+                    </View>
                   )}
 
                   <Pressable
@@ -506,7 +509,12 @@ export default function AccidentScreen() {
                     />
                   </Field>
 
-                  <StepButtons onBack={() => go("confirm")} onNext={() => go("evidence")} nextLabel="Next" />
+                  <StepButtons
+                    onBack={() => go("confirm")}
+                    onNext={() => go("evidence")}
+                    nextLabel="Next"
+                    nextDisabled={draft.latitude == null}
+                  />
                 </View>
               )}
 
