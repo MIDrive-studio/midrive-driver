@@ -2,8 +2,20 @@
 // separate repos) -- keep in sync if the pay-week scheme ever changes there.
 // Native Date only, no date library.
 
+// The operation runs in the UK, so "today" has to be today *here*.
+// new Date().toISOString() is UTC by definition, which through British Summer
+// Time makes everything between midnight and 1am belong to yesterday -- the
+// driver app showing the wrong assignment, payroll opening on the wrong day,
+// a route upload landing on the previous date. Night work is exactly when this
+// is used.
+//
+// Only this one converts an instant into a calendar day. The helpers that take
+// a date string stay UTC-based on purpose: "2026-08-20" has no timezone, and
+// anchoring it to UTC midnight is what stops addDays() drifting across a DST
+// boundary.
 export function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
+  // en-CA formats as YYYY-MM-DD, which is the shape the rest of the app expects.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 }
 
 export function addDays(dateISO: string, n: number): string {

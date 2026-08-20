@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { useWorkingSite } from "@/lib/working-site";
 import { FuelCardReveal } from "@/components/fuel-card-reveal";
 import { FuelStationList, IN_RANGE_METRES, withDistance } from "@/components/fuel-station-list";
 import type { AllocatedCard, Allocation, FuelStationWithDistance, FuelStep, MileageCheck } from "@/types/fuel";
@@ -36,6 +37,7 @@ const STEP_TITLES: Record<FuelStep, string> = {
 
 export default function FuelScreen() {
   const { driver } = useAuth();
+  const { site: workingSite } = useWorkingSite(driver?.id);
 
   const [step, setStep] = useState<FuelStep>("station");
   const [stations, setStations] = useState<FuelStationWithDistance[]>([]);
@@ -273,6 +275,19 @@ export default function FuelScreen() {
         </View>
         <Text className="text-xs text-slate-500">{STEP_TITLES[step]}</Text>
       </View>
+
+      {/* The fuel is charged to the depot the driver is working at today, which
+          is their loan destination when on loan. Stating it here means a driver
+          who spots the wrong site can raise it before they fill up. */}
+      {workingSite?.site_name && (
+        <View className="flex-row items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2">
+          <Feather name="map-pin" size={12} color="#64748b" />
+          <Text className="text-xs text-slate-600">
+            Fuelling for <Text className="font-bold text-slate-800">{workingSite.site_name}</Text>
+            {workingSite.on_loan ? " — you're on loan there today" : ""}
+          </Text>
+        </View>
+      )}
 
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView

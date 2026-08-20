@@ -21,6 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { LocationPicker } from "@/components/location-picker";
+import { useWorkingSite } from "@/lib/working-site";
 import type { AccidentDraft, AccidentStep, EvidenceItem } from "@/types/accident";
 
 // Reporting an accident, as a sequence of small questions rather than one long
@@ -91,6 +92,7 @@ export default function AccidentScreen() {
   const [locationRequested, setLocationRequested] = useState(false);
 
   const driverId = driver?.id;
+  const { site: workingSite } = useWorkingSite(driverId);
 
   // Look for an unfinished report before showing anything, so the driver is
   // never silently started on a fresh one while a saved report exists.
@@ -203,6 +205,11 @@ export default function AccidentScreen() {
 
     // The report is created first: evidence rows and storage paths both key off
     // its id, and a photo with no report to attach to is unrecoverable.
+    //
+    // site_id is sent, but a trigger overrides it with the site the driver is
+    // actually working at that day -- their loan destination when on loan, their
+    // own site otherwise. So it is read back rather than assumed, and the
+    // evidence below is filed against whichever site the report landed on.
     const { data: report, error: reportError } = await supabase
       .from("accident_reports")
       .insert({
@@ -223,7 +230,7 @@ export default function AccidentScreen() {
         third_party_policy_number: draft.third_party_policy_number.trim() || null,
         status: "open",
       })
-      .select("id")
+      .select("id, site_id")
       .single();
 
     if (reportError || !report) {
@@ -239,7 +246,7 @@ export default function AccidentScreen() {
     for (const [index, item] of draft.evidence.entries()) {
       try {
         const extension = item.media_type === "video" ? "mp4" : "jpg";
-        const path = `${driver.site_id}/${report.id}/${Date.now()}-${index}.${extension}`;
+        const path = `${report.site_id}/${report.id}/${Date.now()}-${index}.${extension}`;
         const response = await fetch(item.uri);
         const bytes = new Uint8Array(await response.arrayBuffer());
 
@@ -251,7 +258,7 @@ export default function AccidentScreen() {
 
         const { error: rowError } = await supabase.from("accident_evidence").insert({
           accident_id: report.id,
-          site_id: driver.site_id,
+          site_id: report.site_id,
           media_type: item.media_type,
           file_path: path,
         });
@@ -293,6 +300,18 @@ export default function AccidentScreen() {
           <Feather name="x" size={22} color="#64748b" />
         </Pressable>
       </View>
+
+      {/* Which depot this lands on is not always the one the driver is based
+          at, so it is stated rather than left to be discovered afterwards. */}
+      {workingSite?.site_name && (
+        <View className="flex-row items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-4 py-2">
+          <Feather name="map-pin" size={12} color="#64748b" />
+          <Text className="text-xs text-slate-600">
+            Reporting for <Text className="font-bold text-slate-800">{workingSite.site_name}</Text>
+            {workingSite.on_loan ? " — you're on loan there today" : ""}
+          </Text>
+        </View>
+      )}
 
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView className="flex-1 px-4 py-5" keyboardShouldPersistTaps="handled">
