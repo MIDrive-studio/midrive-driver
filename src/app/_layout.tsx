@@ -81,6 +81,7 @@ function RootNavigator() {
         <Stack.Screen name="login" options={{ gestureEnabled: false }} />
         <Stack.Screen name="complete-profile" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="accident" options={{ presentation: "modal" }} />
       </Stack>
     </>
   );

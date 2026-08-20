@@ -5,6 +5,7 @@ import { ProfileCompletionCard } from "@/components/profile-completion-card";
 import { ShiftToggle } from "@/components/shift-toggle";
 import { NavTile } from "@/components/nav-tile";
 import { HomeAvailabilityTile } from "@/components/home-availability-tile";
+import { AccidentReportTile } from "@/components/accident-report-tile";
 
 export default function HomeScreen() {
   const { driver, signOut } = useAuth();
@@ -33,6 +34,8 @@ export default function HomeScreen() {
           <NavTile icon="credit-card" label="Payroll" subtitle="This week's pay & history" href="/(tabs)/payroll" />
           <NavTile icon="bar-chart-2" label="Performance" subtitle="Score, tier & rank" href="/(tabs)/performance" />
         </View>
+
+        <AccidentReportTile />
       </ScrollView>
     </SafeAreaView>
   );
