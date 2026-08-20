@@ -21,6 +21,10 @@ export default function TabsLayout() {
         options={{ title: "Availability", tabBarIcon: ({ color, size }) => <Feather name="calendar" size={size} color={color} /> }}
       />
       <Tabs.Screen
+        name="fuel"
+        options={{ title: "Fuel", tabBarIcon: ({ color, size }) => <Feather name="droplet" size={size} color={color} /> }}
+      />
+      <Tabs.Screen
         name="payroll"
         options={{ title: "Payroll", tabBarIcon: ({ color, size }) => <Feather name="credit-card" size={size} color={color} /> }}
       />
