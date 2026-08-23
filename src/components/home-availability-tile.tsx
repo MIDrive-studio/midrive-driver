@@ -28,32 +28,49 @@ export function HomeAvailabilityTile() {
 
   if (state === "action_required") {
     return (
-      <Pressable onPress={() => router.push("/(tabs)/availability")} className="w-[48%] items-center rounded-xl border-2 border-red-400 bg-red-50 px-3 py-5">
+      <Pressable
+        onPress={() => router.push("/(tabs)/availability")}
+        accessibilityRole="button"
+        accessibilityLabel="Availability, action required"
+        className="w-[48%] items-center rounded-xl border border-warn-line bg-warn-surface px-3 py-5 active:bg-amber-100"
+      >
         <View className="relative">
-          <Feather name="calendar" size={22} color="#991b1b" />
-          <View className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-red-500" />
+          <Feather name="calendar" size={22} color="#b45309" />
+          <View className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-warn" />
         </View>
-        <Text className="mt-2 text-xs font-bold text-red-800">Availability</Text>
-        <Text className="mt-0.5 text-[11px] font-medium text-red-600">Action Required</Text>
+        <Text className="mt-2 text-sm font-semibold text-warn-strong">Availability</Text>
+        <Text className="mt-0.5 text-xs font-medium text-warn">Needs your answer</Text>
       </Pressable>
     );
   }
 
   if (state === "submitted") {
     return (
-      <Pressable onPress={() => router.push("/(tabs)/availability")} className="w-[48%] items-center rounded-xl border-2 border-green-300 bg-green-50 px-3 py-5">
-        <Feather name="calendar" size={22} color="#166534" />
-        <Text className="mt-2 text-xs font-bold text-green-800">Availability</Text>
-        <Text className="mt-0.5 text-[11px] text-green-600">Submitted ✓</Text>
+      <Pressable
+        onPress={() => router.push("/(tabs)/availability")}
+        accessibilityRole="button"
+        accessibilityLabel="Availability, submitted"
+        className="w-[48%] items-center rounded-xl border border-ok-line bg-ok-surface px-3 py-5 active:bg-emerald-100"
+      >
+        <Feather name="check-circle" size={22} color="#047857" />
+        <Text className="mt-2 text-sm font-semibold text-ok-strong">Availability</Text>
+        <Text className="mt-0.5 text-xs text-ok">Submitted</Text>
       </Pressable>
     );
   }
 
   return (
-    <Pressable onPress={() => router.push("/(tabs)/availability")} className="w-[48%] items-center rounded-xl border border-slate-200 bg-white px-3 py-5">
-      <Feather name="calendar" size={22} color="#475569" />
-      <Text className="mt-2 text-xs font-bold text-slate-900">Availability</Text>
-      <Text className="mt-0.5 text-[11px] text-slate-400">{state === "loading" ? " " : "No active request"}</Text>
+    <Pressable
+      onPress={() => router.push("/(tabs)/availability")}
+      accessibilityRole="button"
+      accessibilityLabel="Availability"
+      className="w-[48%] items-center rounded-xl border border-line bg-surface px-3 py-5 active:bg-surface-sunken"
+    >
+      <Feather name="calendar" size={22} color="#1f5089" />
+      <Text className="mt-2 text-sm font-semibold text-ink">Availability</Text>
+      <Text className="mt-0.5 text-center text-xs text-ink-subtle">
+        {state === "loading" ? " " : "Nothing to answer"}
+      </Text>
     </Pressable>
   );
 }
