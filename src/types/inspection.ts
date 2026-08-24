@@ -14,6 +14,11 @@ export const POSITIONS = [
   { key: "rear_right", label: "Rear Right", short: "Rear R", guide: "three_quarter_rear", mirrored: true },
   { key: "right", label: "Right Side", short: "Right", guide: "side", mirrored: true },
   { key: "front_right", label: "Front Right", short: "Front R", guide: "three_quarter_front", mirrored: true },
+  // Last, because the driver finishes the lap back at the cab door and this is
+  // the one shot they can take sitting down. It is also the only one that is
+  // not a comparison: a dashboard photograph is read for what is lit up on it
+  // today, not for what changed since yesterday.
+  { key: "dashboard", label: "Dashboard", short: "Dash", guide: "dashboard", mirrored: false },
 ] as const;
 
 export type InspectionPosition = (typeof POSITIONS)[number]["key"];
@@ -41,6 +46,7 @@ export const POSITION_INSTRUCTIONS: Record<InspectionPosition, string> = {
   rear_right: "Move to the rear-right corner. You should see the back doors and the passenger side.",
   right: "Stand square to the passenger side, far enough back to fit the whole van in.",
   front_right: "Move to the front-right corner. You should see the nose and the passenger side.",
+  dashboard: "Sit in the cab with the ignition on. Fit the dials inside the outline.",
 };
 
 export type CapturedPhoto = {

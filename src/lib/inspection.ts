@@ -202,19 +202,74 @@ export async function requestAnalysis(inspectionId: string): Promise<void> {
   }
 }
 
-export type InspectionProgress = {
+/**
+ * Finds a van by its registration, for a driver who has been handed one other
+ * than the van on their rota.
+ *
+ * An RPC rather than a plain select: the driver policy on vehicles is scoped to
+ * their home site, so a driver working out of another depot for the day would
+ * otherwise be told a perfectly real van does not exist.
+ */
+export async function lookupVehicle(registration: string): Promise<VehicleCheckContext | null> {
+  const { data, error } = await supabase.rpc("vehicle_by_registration", {
+    p_registration: registration,
+  });
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  // The lookup returns the vehicle only. The rest of the confirm card -- last
+  // check, existing damage -- comes from the context call, which is the same
+  // one used for the rostered van.
+  const vehicle = data as { vehicle_id: string };
+  return vehicleCheckContext(vehicle.vehicle_id, todayISO());
+}
+
+function todayISO(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+}
+
+export type CompletedCheck = {
+  id: string;
+  van_registration: string;
   status: string;
-  new_damage_count: number;
-  pending_review_count: number;
-  detection_count: number;
+  submitted_at: string | null;
+  started_at: string;
+  date: string;
 };
 
-export async function inspectionProgress(inspectionId: string): Promise<InspectionProgress | null> {
-  const { data } = await supabase
+/**
+ * The driver's own checks for a date, newest first.
+ *
+ * Read straight off the table through the driver's own row-level policy -- a
+ * driver can see their own inspections and nobody else's, so this needs no
+ * function behind it.
+ */
+export async function checksForDate(dateISO: string): Promise<CompletedCheck[]> {
+  const { data, error } = await supabase
     .from("vehicle_inspections")
-    .select("status, new_damage_count, pending_review_count, detection_count")
-    .eq("id", inspectionId)
-    .maybeSingle();
+    .select("id, van_registration, status, submitted_at, started_at, date")
+    .eq("date", dateISO)
+    .order("started_at", { ascending: false });
 
-  return (data as InspectionProgress | null) ?? null;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CompletedCheck[];
+}
+
+/** Every check this driver has done, newest first, for the history screen. */
+export async function recentChecks(limit = 30): Promise<CompletedCheck[]> {
+  const { data, error } = await supabase
+    .from("vehicle_inspections")
+    .select("id, van_registration, status, submitted_at, started_at, date")
+    .order("date", { ascending: false })
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CompletedCheck[];
+}
+
+/** Whether a check has been handed over, as opposed to abandoned part-way. */
+export function isSubmitted(check: { status: string }): boolean {
+  return ["submitted", "processing", "analysed", "requires_review", "approved"].includes(check.status);
 }

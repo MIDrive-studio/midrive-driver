@@ -42,3 +42,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Local dev server output
+expo.log

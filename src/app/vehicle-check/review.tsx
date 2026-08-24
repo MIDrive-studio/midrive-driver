@@ -46,11 +46,16 @@ export default function ReviewScreen() {
 
       await submitInspection(inspectionId);
 
-      // Best effort, and never allowed to fail the submission: the portal
-      // analyses the queue on a schedule regardless.
-      await requestAnalysis(inspectionId);
+      // Deliberately not awaited. The analysis runs on the portal's own
+      // schedule whether or not this request ever lands, so making the driver
+      // wait on it would be making them wait on something that does not matter
+      // to them. Fired and forgotten; the catch inside it swallows failures.
+      void requestAnalysis(inspectionId);
 
-      router.replace({ pathname: "/vehicle-check/processing", params: { id: inspectionId } });
+      router.replace({
+        pathname: "/vehicle-check/submitted",
+        params: { registration: vehicle?.registration ?? "" },
+      });
     } catch (submitError) {
       setError((submitError as Error).message);
       setSubmitting(false);
@@ -131,7 +136,8 @@ export default function ReviewScreen() {
               {missing.length} still to take
             </Text>
             <Text className="mt-1 text-xs leading-5 text-warn">
-              All eight are needed. Without one, the office has no way to compare that side of the van with yesterday.
+              All {POSITION_KEYS.length} are needed. Without one, the office has no way to compare that part of the van
+              with yesterday.
             </Text>
           </View>
         )}

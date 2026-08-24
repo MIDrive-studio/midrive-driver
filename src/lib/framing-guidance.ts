@@ -59,6 +59,10 @@ export function useFramingGuidance(active: boolean): Guidance {
 
   useEffect(() => {
     if (!active) {
+      // "unknown" reads as fine, which is what the dashboard shot needs:
+      // photographing an instrument cluster means holding the phone tilted
+      // down over the wheel, and telling someone to hold it upright there
+      // would be telling them to take a worse photograph.
       setState("unknown");
       return;
     }

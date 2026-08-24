@@ -44,7 +44,12 @@ export default function CaptureScreen() {
   const index = Math.max(POSITION_KEYS.indexOf(activePosition), 0);
   const position = POSITIONS[index];
   const setIndex = (next: number) => setActivePosition(POSITION_KEYS[next]);
-  const guidance = useFramingGuidance(pending === null && permission?.granted === true);
+  // Off for the dashboard: that shot is taken over the top of the steering
+  // wheel with the phone tilted down, so a "hold it upright" prompt would be
+  // asking for a worse photograph than the one the driver is about to take.
+  const guidance = useFramingGuidance(
+    pending === null && permission?.granted === true && position.key !== "dashboard"
+  );
 
   const done = useMemo(() => POSITION_KEYS.filter((key) => Boolean(photos[key])), [photos]);
 
