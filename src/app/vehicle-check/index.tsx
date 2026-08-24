@@ -10,6 +10,7 @@ import {
   checksForDate,
   isSubmitted,
   lookupVehicle,
+  recentChecks,
   startInspection,
   vehicleCheckContext,
   type CompletedCheck,
@@ -61,6 +62,7 @@ export default function VehicleCheckStart() {
   const [context, setContext] = useState<VehicleCheckContext | null>(null);
   const [rosteredId, setRosteredId] = useState<string | null>(null);
   const [todaysChecks, setTodaysChecks] = useState<CompletedCheck[]>([]);
+  const [earlier, setEarlier] = useState<CompletedCheck[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mileage, setMileage] = useState("");
   const [starting, setStarting] = useState(false);
@@ -74,9 +76,15 @@ export default function VehicleCheckStart() {
 
   const load = useCallback(async () => {
     try {
-      const [vehicleId, checks] = await Promise.all([assignedVehicleId(today), checksForDate(today)]);
+      const [vehicleId, checks, history] = await Promise.all([
+        assignedVehicleId(today),
+        checksForDate(today),
+        recentChecks(20),
+      ]);
 
       setTodaysChecks(checks.filter(isSubmitted));
+      // Previous days only. Today's are already above, in full.
+      setEarlier(history.filter((check) => check.date !== today && isSubmitted(check)));
       setRosteredId(vehicleId);
       setContext(vehicleId ? await vehicleCheckContext(vehicleId, today) : null);
       setError(null);
@@ -391,9 +399,37 @@ export default function VehicleCheckStart() {
             </Pressable>
           </>
         )}
+
+        {/* Previous days, at the bottom and deliberately quiet. A driver
+            occasionally needs to prove they did a check last Tuesday; nobody
+            needs that above the thing they are doing this morning. */}
+        {stage !== "manual" && earlier.length > 0 && (
+          <View className="mt-6">
+            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">Earlier checks</Text>
+
+            <View className="overflow-hidden rounded-xl border border-line bg-surface">
+              {earlier.map((check, index) => (
+                <View
+                  key={check.id}
+                  className={`flex-row items-center gap-3 px-4 py-2.5 ${index > 0 ? "border-t border-line" : ""}`}
+                >
+                  <Text className="w-20 text-xs text-ink-subtle">{formatShortDate(check.date)}</Text>
+                  <Text className="flex-1 text-sm font-semibold text-ink">{check.van_registration}</Text>
+                  <Text className="text-xs text-ink-subtle">
+                    {check.submitted_at ? formatTime(check.submitted_at) : "—"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 function Row({
