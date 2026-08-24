@@ -41,6 +41,13 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MiDrive Driver uses the camera for your daily vehicle check - eight photographs of the van you have been given, so the office can tell new damage from marks that were already there.",
+          "recordAudioAndroid": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

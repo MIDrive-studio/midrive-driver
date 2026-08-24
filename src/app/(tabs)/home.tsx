@@ -8,6 +8,7 @@ import { NavTile } from "@/components/nav-tile";
 import { HomeAvailabilityTile } from "@/components/home-availability-tile";
 import { AccidentReportTile } from "@/components/accident-report-tile";
 import { TodayCard } from "@/components/today-card";
+import { VehicleCheckTile } from "@/components/vehicle-check-tile";
 
 // A driver opens this in a yard, on a phone, usually in a hurry, to find out
 // what they are doing. So today's job comes first and everything else follows.
@@ -48,6 +49,8 @@ export default function HomeScreen() {
             <Feather name="log-out" size={18} color="#64748b" />
           </Pressable>
         </View>
+
+        <VehicleCheckTile />
 
         <TodayCard driverId={driver.id} />
 

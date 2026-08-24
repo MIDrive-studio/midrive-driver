@@ -82,6 +82,9 @@ function RootNavigator() {
         <Stack.Screen name="complete-profile" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="accident" options={{ presentation: "modal" }} />
+        {/* Full screen rather than a modal: the camera fills the display and a
+            modal sheet leaves a strip of the home screen showing round it. */}
+        <Stack.Screen name="vehicle-check" options={{ presentation: "fullScreenModal" }} />
       </Stack>
     </>
   );
