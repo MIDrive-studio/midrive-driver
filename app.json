@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "midrive-driver",
+    "name": "MiDrive Driver",
     "slug": "midrive-driver",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,9 +8,24 @@
     "scheme": "midrivedriver",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "uk.co.unitedeliveries.midrivedriver",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
+      "package": "uk.co.unitedeliveries.midrivedriver",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
