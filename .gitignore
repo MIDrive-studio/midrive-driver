@@ -45,3 +45,7 @@ example
 
 # Local dev server output
 expo.log
+
+# Google Play service account key -- a credential that can publish releases.
+# Download from Play Console and keep it out of git.
+play-service-account.json

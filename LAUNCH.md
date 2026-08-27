@@ -1,116 +1,109 @@
 # Getting the driver app onto phones
 
-Two stages. This document covers the first and sets up for the second, so
-nothing here is repeated later.
+Two ways in, and they are not alternatives — the first is how you test, the
+second is how you distribute.
 
-1. **Internal distribution** — a build your own drivers install directly. No
-   store, no review, no fees.
-2. **The stores** — App Store and Play Store. Needs paid developer accounts and
-   review time. Everything configured below carries straight over.
+1. **Internal distribution** — an APK you send to a driver directly. No store,
+   no review, no fees. Already working.
+2. **Google Play** — the real launch. Needs the Play Console (set up), a store
+   listing, and review.
 
 ## What is already done
 
 | | |
 |---|---|
-| App name | `MiDrive Driver` — what appears under the icon |
-| iOS bundle id | `uk.co.unitedeliveries.midrivedriver` |
-| Android package | `uk.co.unitedeliveries.midrivedriver` |
+| App name | `MiDrive Driver` |
+| Package | `uk.co.unitedeliveries.midrivedriver` |
 | Icons | Generated from the portal's brand mark |
-| `eas.json` | `development`, `preview` and `production` profiles |
-| Permissions | Location (incl. background) and camera, declared with reasons |
+| EAS project | `@arahman786/midrive-driver` |
+| Signing | Keystore generated and held by Expo |
+| Config | Supabase and portal URL set for all three environments |
+| Updates | `expo-updates` installed — JavaScript changes ship without a build |
+| Profiles | `preview` builds an APK, `production` builds an AAB (what Play requires) |
 
-**The bundle id and package are effectively permanent.** They can be changed
-freely today; after a store release, changing one means a new listing with no
-carry-over of installs or reviews. Say now if `uk.co.unitedeliveries…` is wrong —
-for example if MiDrive should be branded separately from United Deliveries.
+**The package name is permanent from the first Play upload.** Changing it later
+means a new listing with no carry-over of installs or reviews. Say now if
+`uk.co.unitedeliveries.midrivedriver` is wrong.
 
-## Stage 1 — onto real phones
+## Before submitting anything
 
-### One-off setup
+**Install the current preview APK and confirm the app opens.** The first build
+crashed on launch — `expo-font` and `expo-linking` were missing, which Expo Go
+provides but a standalone build does not. That is fixed, but fixed-in-theory is
+not the same as opened-on-a-phone, and an app that crashes on launch fails Play
+review outright.
 
-```bash
-npm install -g eas-cli
-eas login                 # a free Expo account; create one if you have none
-```
+Run `npx expo-doctor` before any build. It catches exactly that class of
+problem, and would have caught this one.
 
-Then, from this directory:
+## Google Play, step by step
 
-```bash
-eas init                  # links this repo to an Expo project, writes the id
-```
+### 1. Create the app in Play Console
 
-### Configuration the build needs
+**All apps → Create app.** Name `MiDrive Driver`, language, **App** (not game),
+**Free**. The package name is set by the upload, not typed here.
 
-The app reads Supabase from `EXPO_PUBLIC_*` variables. `.env` is gitignored and
-EAS builds from git, so the build will not see it — the values go to EAS instead:
+### 2. The service account, so releases can be pushed from here
 
-```bash
-eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value "https://…supabase.co" --environment production --environment preview --visibility plaintext
-eas env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "eyJ…" --environment production --environment preview --visibility plaintext
-```
+Play Console → **Setup → API access** → create or link a Google Cloud project →
+**Create service account**. In Google Cloud, give it a key (JSON) and download
+it. Back in Play Console, grant that account **Release manager** on this app.
 
-`plaintext` is correct here and not an oversight. Anything prefixed
-`EXPO_PUBLIC_` is compiled into the app bundle and can be read out of it by
-anyone who installs it, so treating these as secret would be theatre. They are
-safe to expose for the same reason the portal's anon key is: Row Level Security
-is what actually protects the data. **Never** put the service-role key here.
+Save the JSON as `play-service-account.json` in this folder. It is gitignored —
+it can publish releases, so treat it like a password.
 
-`EXPO_PUBLIC_PORTAL_URL` is already set in `eas.json` — it is only a URL.
+### 3. The listing
 
-### Build it
+Play will not let you release without:
 
-**Android** — the easy one. Produces an APK anyone can install:
+- Short description (80 chars) and full description
+- **Feature graphic** 1024×500
+- **At least 2 phone screenshots** — take them from a real device
+- App icon 512×512
+- **A privacy policy at a public URL.** Not optional, and see below.
+- Content rating questionnaire
+- Data safety form — declare location, camera, and the personal data collected
 
-```bash
-eas build --platform android --profile preview
-```
+### 4. The part most likely to cost you a rejection
 
-Roughly 10–20 minutes on the free tier. You get a link. Send it to a driver;
-they open it on the phone and install. Android asks them to allow installing
-from an unknown source — expected, and the only friction in the whole path.
+This app declares `ACCESS_BACKGROUND_LOCATION`, for shift tracking. Google
+reviews that far more heavily than anything else here and will ask for:
 
-**iOS** — needs an Apple Developer account (£79/yr) even for internal testing.
-Apple has no equivalent of sideloading. If you have one:
+- A written justification of why the feature needs background location
+- Usually **a short video** showing the in-app disclosure and the feature working
+- A privacy policy that names background location explicitly
 
-```bash
-eas build --platform ios --profile preview
-```
+It is a legitimate fleet use and it does get approved, but budget for one round
+trip rather than being surprised by it. If you want to launch sooner, the
+alternative is shipping without background location and adding it in a later
+release, once the app is already live.
 
-Every test device's UDID must be registered first (`eas device:create`). If you
-do not have an account yet, test on Android and come back to iOS at stage 2 —
-the code is identical.
-
-## Stage 2 — the stores
-
-Not yet done, and needing accounts rather than code:
-
-- **Apple Developer** — £79/yr, review typically 1–3 days
-- **Google Play** — £20 one-off, review 1–7 days for a first submission
-- Store listing: description, screenshots at several sizes, support URL
-- Privacy declarations for location and camera
-
-One thing to plan for: **background location gets extra Google scrutiny**. The
-app declares `ACCESS_BACKGROUND_LOCATION` for shift tracking, and Play requires
-a written justification plus, usually, a short video showing the in-app
-disclosure and what the feature does. It is approvable — this is a legitimate
-fleet use — but it is the single most likely cause of a rejected first
-submission, so budget for one round trip.
-
-Build for the stores with:
+### 5. Build and submit
 
 ```bash
 eas build --platform android --profile production
-eas build --platform ios --profile production
+eas submit --platform android --latest
 ```
 
-## Updating drivers afterwards
+`eas.json` submits to the **internal testing** track as a **draft**. That is
+deliberate: internal testing has no review wait, so you can install from Play
+and check the whole thing works before anything is public. Promote to production
+in the console when you are happy.
 
-Most changes need no new build at all. JavaScript-only changes ship over the air:
+## Updating afterwards
 
-```bash
-eas update --branch preview --message "what changed"
-```
+Two different mechanisms, and the difference matters:
 
-Drivers get it on next launch. A new build is only required when native
-configuration changes — a new permission, a new native module, an icon, or
-anything in `app.json`.
+| Change | How |
+|---|---|
+| JavaScript, styling, copy, most fixes | `eas update --branch production` — reaches phones on next launch, no review |
+| Native config, permissions, icon, new native module | New build, new Play release, review again |
+
+So most updates do not go through Google at all. Store distribution and
+over-the-air updates are separate things, and you get both.
+
+## iOS
+
+Not started. Needs an Apple Developer account (£79/yr) before it will build at
+all, even for internal testing. Everything configured here carries over — the
+identifiers, the icons, the environment variables and the update channel.
