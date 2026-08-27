@@ -58,7 +58,7 @@ export async function startShift(
     distanceInterval: 100,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
-      notificationTitle: "MiDrive Driver",
+      notificationTitle: "MiDrive DA",
       notificationBody: "Sharing your location while on shift.",
     },
   });

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MiDrive Driver",
+    "name": "MiDrive DA",
     "slug": "midrive-driver",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -70,7 +70,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "MiDrive Driver uses your location to track your shift and share it with dispatch while you're on duty.",
+          "locationAlwaysAndWhenInUsePermission": "MiDrive DA uses your location to track your shift and share it with dispatch while you're on duty.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -78,7 +78,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "MiDrive Driver uses the camera for your daily vehicle check - eight photographs of the van you have been given, so the office can tell new damage from marks that were already there.",
+          "cameraPermission": "MiDrive DA uses the camera for your daily vehicle check - eight photographs of the van you have been given, so the office can tell new damage from marks that were already there.",
           "recordAudioAndroid": false
         }
       ],

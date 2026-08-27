@@ -39,7 +39,7 @@ export default function LoginScreen() {
           <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-amber-500">
             <Feather name="truck" size={30} color="white" />
           </View>
-          <Text className="text-2xl font-bold text-white">MiDrive Driver</Text>
+          <Text className="text-2xl font-bold text-white">MiDrive DA</Text>
           <Text className="mt-1 text-sm text-slate-400">Sign in to your driver account</Text>
         </View>
 
