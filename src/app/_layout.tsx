@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootNavigator() {
-  const { loading, isSignedIn, driver, driverError, reloadDriver, signOut } = useAuth();
+  const { loading, sessionError, isSignedIn, driver, driverError, reloadDriver, signOut } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [splashHidden, setSplashHidden] = useState(false);
@@ -45,6 +45,29 @@ function RootNavigator() {
       <View className="flex-1 items-center justify-center bg-white">
         <StatusBar style="dark" />
         <ActivityIndicator size="large" color="#f59e0b" />
+      </View>
+    );
+  }
+
+  // Shown rather than swallowed. A build once sat on the splash screen for half
+  // an hour because the sign-in check never settled and nothing said so; the
+  // driver had no way to tell a slow start from a dead app, and neither did
+  // anyone trying to fix it. Sign-in still works from here -- this is a warning,
+  // not a wall.
+  if (sessionError && !isSignedIn && topSegment !== "login") {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-8">
+        <StatusBar style="dark" />
+        <Text className="mb-2 text-center text-base font-semibold text-slate-900">
+          Couldn&apos;t start properly
+        </Text>
+        <Text className="mb-6 text-center text-sm text-slate-600">{sessionError}</Text>
+        <Pressable
+          onPress={() => router.replace("/login")}
+          className="rounded-xl bg-slate-900 px-6 py-3"
+        >
+          <Text className="text-sm font-semibold text-white">Go to sign in</Text>
+        </Pressable>
       </View>
     );
   }

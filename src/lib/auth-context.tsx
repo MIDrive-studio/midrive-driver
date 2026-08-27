@@ -6,6 +6,8 @@ import type { Driver } from "@/types/driver";
 
 type AuthContextValue = {
   loading: boolean;
+  /** Why the sign-in check failed, when it did. Shown rather than swallowed. */
+  sessionError: string | null;
   isSignedIn: boolean;
   driver: Driver | null;
   driverError: string | null;
@@ -16,12 +18,13 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { session, loading: sessionLoading } = useSession();
+  const { session, loading: sessionLoading, error: sessionError } = useSession();
   const { driver, loading: driverLoading, error: driverError, reload } = useDriver(session?.user.id);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       loading: sessionLoading || (Boolean(session) && driverLoading),
+      sessionError,
       isSignedIn: Boolean(session),
       driver,
       driverError,
@@ -30,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
       },
     }),
-    [session, sessionLoading, driver, driverError, driverLoading, reload]
+    [session, sessionLoading, sessionError, driver, driverError, driverLoading, reload]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
