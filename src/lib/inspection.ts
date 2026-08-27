@@ -221,8 +221,21 @@ export async function lookupVehicle(registration: string): Promise<VehicleCheckC
   // The lookup returns the vehicle only. The rest of the confirm card -- last
   // check, existing damage -- comes from the context call, which is the same
   // one used for the rostered van.
-  const vehicle = data as { vehicle_id: string };
-  return vehicleCheckContext(vehicle.vehicle_id, todayISO());
+  const vehicle = data as { vehicle_id: string; registration?: string };
+  const context = await vehicleCheckContext(vehicle.vehicle_id, todayISO());
+
+  // Returning null here would be a lie the screen then repeats: it reports a
+  // null as "no van on the fleet with that registration", and we are standing
+  // on proof that there is one -- we just looked it up. Distinguishing the two
+  // matters because the answers differ: a wrong plate is the driver's to fix,
+  // and this is not.
+  if (!context) {
+    throw new Error(
+      `Found ${vehicle.registration ?? "that van"}, but couldn't load its details. Ask the office to check your access to it.`
+    );
+  }
+
+  return context;
 }
 
 function todayISO(): string {
