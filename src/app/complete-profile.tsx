@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
@@ -110,6 +111,7 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
 
 export default function CompleteProfileScreen() {
   const { driver, reloadDriver } = useAuth();
+  const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     date_of_birth: driver?.date_of_birth ?? "",
     nationality: driver?.nationality ?? "",
@@ -177,16 +179,38 @@ export default function CompleteProfileScreen() {
     }
 
     await reloadDriver();
-    // Root layout's redirect effect sends us to /(tabs)/home once
-    // driver.profile_status flips to "completed".
+
+    // Leaving is this screen's job now. It used to rely on the root layout
+    // bouncing it away once profile_status flipped, which meant the screen
+    // could only be exited by a redirect that also made it unreachable.
+    router.replace("/(tabs)/home");
   }
+
+  // Two different visits to one screen. A new driver is being onboarded and has
+  // nowhere else to go; a driver who came back to add their bank details chose
+  // to be here and must be able to leave without filling anything in. Same
+  // form, different framing, and only one of them gets a way out.
+  const onboarding = driver?.profile_status !== "completed";
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <ScrollView contentContainerClassName="px-6 py-6" keyboardShouldPersistTaps="handled">
-        <Text className="mb-1 text-2xl font-bold text-slate-900">Complete Your Profile</Text>
+        {!onboarding && (
+          <Pressable
+            onPress={() => router.replace("/(tabs)/home")}
+            className="mb-4 flex-row items-center gap-1.5 self-start py-1"
+          >
+            <Text className="text-sm font-medium text-slate-600">&larr; Back</Text>
+          </Pressable>
+        )}
+
+        <Text className="mb-1 text-2xl font-bold text-slate-900">
+          {onboarding ? "Complete Your Profile" : "Your Details"}
+        </Text>
         <Text className="mb-6 text-slate-500">
-          We need a few more details before you can start using the app.
+          {onboarding
+            ? "We need a few more details before you can start using the app."
+            : "Keep these up to date. Payroll needs your bank details, UTR and NI number before it can pay you."}
         </Text>
 
         {error && (

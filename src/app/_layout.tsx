@@ -36,7 +36,19 @@ function RootNavigator() {
       return;
     }
 
-    if (isSignedIn && driver?.profile_status === "completed" && (topSegment === "login" || topSegment === "complete-profile" || topSegment === undefined)) {
+    // "complete-profile" is deliberately not in this list any more.
+    //
+    // profile_status is a one-time onboarding flag: it flips to "completed" the
+    // first time a driver saves the form, whether or not they filled everything
+    // in. The card on the home screen measures the actual fields instead, so it
+    // can rightly say "58% done — payroll needs your bank details" about a
+    // driver whose status says completed. Pressing its button pushed to this
+    // screen and this line threw them straight back, so the button did nothing
+    // at all and there was no way to add the missing details from the app.
+    //
+    // Onboarding still forces the screen (the branch above). This branch now
+    // only handles the two cases where the driver did not choose to be there.
+    if (isSignedIn && driver?.profile_status === "completed" && (topSegment === "login" || topSegment === undefined)) {
       router.replace("/(tabs)/home");
     }
   }, [loading, isSignedIn, driver, topSegment, router, splashHidden]);
