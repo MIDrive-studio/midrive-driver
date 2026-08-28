@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -114,9 +115,16 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // SafeAreaProvider is what makes useSafeAreaInsets() return real numbers.
+  // Without it the hook answers zero for every edge -- silently, with no
+  // warning -- which is why the tab bar's inset fix appeared to do nothing:
+  // it was adding zero. Screens using <SafeAreaView> got away with it because
+  // the navigator supplies its own context to them; the hook had none.
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
