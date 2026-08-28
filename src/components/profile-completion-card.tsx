@@ -6,7 +6,34 @@ import type { Driver } from "@/types/driver";
 
 export function ProfileCompletionCard({ driver }: { driver: Driver }) {
   const router = useRouter();
-  const { percent, missing } = calcProfileCompletion(driver);
+  const { percent, missing, missingLater } = calcProfileCompletion(driver);
+
+  // Everything they can give, given. What is left is waiting on HMRC, so this
+  // becomes a quiet reminder rather than a warning about being unpaid -- the
+  // driver has done their part and should not be told otherwise every morning.
+  if (percent === 100 && missingLater.length > 0) {
+    return (
+      <View className="mb-4 rounded-xl border border-line bg-white p-4">
+        <View className="flex-row items-start gap-3">
+          <Feather name="clock" size={18} color="#64748b" style={{ marginTop: 2 }} />
+          <View className="flex-1">
+            <Text className="text-sm font-semibold text-slate-900">One thing left, when you have it</Text>
+            <Text className="mt-0.5 text-xs text-slate-500">
+              Add your {missingLater.join(" and ")} once HMRC sends it. Payroll needs it before it can
+              pay you as self-employed.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/complete-profile")}
+              accessibilityRole="button"
+              className="mt-3 items-center rounded-lg border border-line py-2.5 active:bg-slate-50"
+            >
+              <Text className="text-sm font-semibold text-slate-700">Add it now</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   if (percent === 100) return null;
 
@@ -21,7 +48,7 @@ export function ProfileCompletionCard({ driver }: { driver: Driver }) {
               percentage never explained that. */}
           <Text className="text-sm font-semibold text-warn-strong">Finish your profile to get paid</Text>
           <Text className="mt-0.5 text-xs text-warn">
-            {percent}% done. Payroll needs your bank details, UTR and NI number before it can pay you.
+            {percent}% done. Payroll needs your bank details and NI number before it can pay you.
           </Text>
 
           <View className="my-3 h-1.5 w-full overflow-hidden rounded-full bg-warn-line">

@@ -11,6 +11,7 @@ import type { DriverProfileUpdate } from "@/types/driver";
 // converted to `string | null` (DriverProfileUpdate's shape) at submit time.
 type FormState = {
   date_of_birth: string;
+  phone: string;
   nationality: string;
   address_line1: string;
   address_line2: string;
@@ -27,18 +28,26 @@ type FormState = {
   bank_account_number: string;
 };
 
-// Required (label, form key) pairs -- keys match PROFILE_REQUIRED_FIELDS in
-// lib/profile-completion.ts, minus "phone" (admin-set at driver creation,
-// not edited here).
+// Required (label, form key) pairs, matching PROFILE_REQUIRED_FIELDS in
+// lib/profile-completion.ts.
+//
+// "phone" used to be excluded here on the grounds that an administrator sets it
+// when creating the driver -- but the home screen still counted it, so a driver
+// whose record had no phone was told to add one and given no field to add it
+// in. It is editable now.
+//
+// "utr_number" is deliberately absent: HMRC takes weeks or months to issue one,
+// and a new driver cannot produce a number that does not exist yet. It is asked
+// for on the form as optional, and chased separately once they have it.
 const REQUIRED: { key: keyof FormState; label: string }[] = [
   { key: "date_of_birth", label: "Date of Birth" },
+  { key: "phone", label: "Phone Number" },
   { key: "address_line1", label: "Address" },
   { key: "city", label: "City" },
   { key: "postcode", label: "Postcode" },
   { key: "emergency_contact", label: "Emergency Contact Name" },
   { key: "emergency_phone", label: "Emergency Contact Phone" },
   { key: "ni_number", label: "National Insurance Number" },
-  { key: "utr_number", label: "UTR Number" },
   { key: "bank_account_name", label: "Bank Account Name" },
   { key: "bank_sort_code", label: "Sort Code" },
   { key: "bank_account_number", label: "Account Number" },
@@ -114,6 +123,7 @@ export default function CompleteProfileScreen() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     date_of_birth: driver?.date_of_birth ?? "",
+    phone: driver?.phone ?? "",
     nationality: driver?.nationality ?? "",
     address_line1: driver?.address_line1 ?? "",
     address_line2: driver?.address_line2 ?? "",
@@ -152,6 +162,7 @@ export default function CompleteProfileScreen() {
     // the DriverProfileUpdate type's contract.
     const payload: DriverProfileUpdate = {
       date_of_birth: form.date_of_birth || null,
+      phone: form.phone || null,
       nationality: form.nationality || null,
       address_line1: form.address_line1 || null,
       address_line2: form.address_line2 || null,
@@ -222,6 +233,7 @@ export default function CompleteProfileScreen() {
         <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Personal</Text>
         <DateField label="Date of Birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
         <Field label="Nationality" value={form.nationality} onChangeText={(v) => set("nationality", v)} autoCapitalize="words" />
+        <Field label="Phone Number" value={form.phone} onChangeText={(v) => set("phone", v)} keyboardType="phone-pad" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Address</Text>
         <Field label="Address Line 1" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} autoCapitalize="words" />
@@ -234,7 +246,14 @@ export default function CompleteProfileScreen() {
         <Field label="Contact Phone" value={form.emergency_phone} onChangeText={(v) => set("emergency_phone", v)} keyboardType="phone-pad" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
-        <Field label="UTR Number" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
+        {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so a
+            new driver cannot supply one and must not be blocked waiting for it.
+            Saying when it is needed is more use than marking it required. */}
+        <Field label="UTR Number (when you have it)" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
+        <Text className="-mt-3 mb-4 text-xs text-slate-500">
+          Leave blank if HMRC has not sent yours yet. You can add it here any time — payroll needs it
+          before it can pay you as self-employed.
+        </Text>
         <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v.toUpperCase())} autoCapitalize="characters" maxLength={9} />
 
         <View className="mb-4 flex-row items-center justify-between">

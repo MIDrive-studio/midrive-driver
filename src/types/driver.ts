@@ -35,6 +35,7 @@ export type Driver = {
 // bug in the form can't accidentally send a restricted field like site_id.
 export type DriverProfileUpdate = {
   date_of_birth: string | null;
+  phone: string | null;
   nationality: string | null;
   address_line1: string | null;
   address_line2: string | null;
