@@ -31,6 +31,29 @@ function RootNavigator() {
       return;
     }
 
+    // Onboarding comes before the profile form, and replaces it.
+    //
+    // A driver who has not been cleared to work has a list of things to do that
+    // is longer than this form and partly out of their hands -- a licence the
+    // office has to look at, documents to sign, a background check nobody has
+    // run yet. Sending them to complete-profile showed them a form they could
+    // finish and then a home screen implying they were ready, while the office
+    // was still waiting on half of it.
+    //
+    // The checklist is the whole of what they see until the office activates
+    // them. It collects everything complete-profile did, and more.
+    if (isSignedIn && driver?.status === "onboarding" && topSegment !== "onboarding") {
+      router.replace("/onboarding");
+      return;
+    }
+
+    // The other way round: activated while the app was open, or on the
+    // checklist for any other reason with nothing left to do there.
+    if (isSignedIn && driver && driver.status !== "onboarding" && topSegment === "onboarding") {
+      router.replace("/(tabs)/home");
+      return;
+    }
+
     if (isSignedIn && driver?.profile_status === "pending" && topSegment !== "complete-profile") {
       router.replace("/complete-profile");
       return;
@@ -116,6 +139,7 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" options={{ gestureEnabled: false }} />
         <Stack.Screen name="complete-profile" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="accident" options={{ presentation: "modal" }} />
         {/* Full screen rather than a modal: the camera fills the display and a
