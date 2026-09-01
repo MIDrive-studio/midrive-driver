@@ -28,6 +28,7 @@ const LOOK: Record<StageState, { icon: keyof typeof Feather.glyphMap; tint: stri
 // is the truth rather than a dead tap.
 const ROUTE: Record<string, string> = {
   personal: "/onboarding/personal",
+  address_history: "/onboarding/addresses",
 };
 
 function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => void }) {
