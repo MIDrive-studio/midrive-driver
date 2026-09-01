@@ -29,6 +29,8 @@ const LOOK: Record<StageState, { icon: keyof typeof Feather.glyphMap; tint: stri
 const ROUTE: Record<string, string> = {
   personal: "/onboarding/personal",
   address_history: "/onboarding/addresses",
+  licence: "/onboarding/document?kind=drivers_licence",
+  right_to_work: "/onboarding/document?kind=right_to_work",
 };
 
 function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => void }) {
@@ -152,7 +154,7 @@ export default function OnboardingChecklist() {
         <View className="mt-5">
           {state.stages.map((stage) => {
             const route = ROUTE[stage.key];
-            const canOpen = Boolean(route) && (stage.state === "waiting_driver" || stage.state === "rejected");
+            const canOpen = Boolean(route) && stage.state !== "locked" && stage.state !== "not_required";
             return (
               <StageRow
                 key={stage.key}
