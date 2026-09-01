@@ -26,7 +26,9 @@ const LOOK: Record<StageState, { icon: keyof typeof Feather.glyphMap; tint: stri
 // Which steps this app can open. A stage missing from here still appears on the
 // list with its state and detail; it simply does not lead anywhere yet, which
 // is the truth rather than a dead tap.
-const ROUTE: Record<string, string> = {};
+const ROUTE: Record<string, string> = {
+  personal: "/onboarding/personal",
+};
 
 function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => void }) {
   const look = LOOK[stage.state] ?? LOOK.locked;

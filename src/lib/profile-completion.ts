@@ -25,8 +25,9 @@ export const PROFILE_REQUIRED_FIELDS: { key: keyof Driver; label: string }[] = [
   { key: "bank_account_name", label: "Bank Account Name" },
   { key: "bank_sort_code", label: "Sort Code" },
   { key: "bank_account_number", label: "Account Number" },
-  { key: "emergency_contact", label: "Emergency Contact Name" },
-  { key: "emergency_phone", label: "Emergency Contact Phone" },
+  { key: "next_of_kin_name", label: "Next of Kin" },
+  { key: "next_of_kin_phone", label: "Next of Kin Phone" },
+  { key: "next_of_kin_relationship", label: "Relationship to You" },
 ];
 
 /** Wanted eventually, but never a reason to hold up a profile. */

@@ -17,8 +17,9 @@ type FormState = {
   address_line2: string;
   city: string;
   postcode: string;
-  emergency_contact: string;
-  emergency_phone: string;
+  next_of_kin_name: string;
+  next_of_kin_phone: string;
+  next_of_kin_relationship: string;
   utr_number: string;
   ni_number: string;
   vat_registered: boolean;
@@ -45,8 +46,9 @@ const REQUIRED: { key: keyof FormState; label: string }[] = [
   { key: "address_line1", label: "Address" },
   { key: "city", label: "City" },
   { key: "postcode", label: "Postcode" },
-  { key: "emergency_contact", label: "Emergency Contact Name" },
-  { key: "emergency_phone", label: "Emergency Contact Phone" },
+  { key: "next_of_kin_name", label: "Next of Kin" },
+  { key: "next_of_kin_phone", label: "Next of Kin Phone" },
+  { key: "next_of_kin_relationship", label: "Relationship to You" },
   { key: "ni_number", label: "National Insurance Number" },
   { key: "bank_account_name", label: "Bank Account Name" },
   { key: "bank_sort_code", label: "Sort Code" },
@@ -129,8 +131,9 @@ export default function CompleteProfileScreen() {
     address_line2: driver?.address_line2 ?? "",
     city: driver?.city ?? "",
     postcode: driver?.postcode ?? "",
-    emergency_contact: driver?.emergency_contact ?? "",
-    emergency_phone: driver?.emergency_phone ?? "",
+    next_of_kin_name: driver?.next_of_kin_name ?? "",
+    next_of_kin_phone: driver?.next_of_kin_phone ?? "",
+    next_of_kin_relationship: driver?.next_of_kin_relationship ?? "",
     utr_number: driver?.utr_number ?? "",
     ni_number: driver?.ni_number ?? "",
     vat_registered: driver?.vat_registered ?? false,
@@ -168,8 +171,9 @@ export default function CompleteProfileScreen() {
       address_line2: form.address_line2 || null,
       city: form.city || null,
       postcode: form.postcode || null,
-      emergency_contact: form.emergency_contact || null,
-      emergency_phone: form.emergency_phone || null,
+      next_of_kin_name: form.next_of_kin_name || null,
+      next_of_kin_phone: form.next_of_kin_phone || null,
+      next_of_kin_relationship: form.next_of_kin_relationship || null,
       utr_number: form.utr_number || null,
       ni_number: form.ni_number || null,
       vat_registered: form.vat_registered,
@@ -242,8 +246,9 @@ export default function CompleteProfileScreen() {
         <Field label="Postcode" value={form.postcode} onChangeText={(v) => set("postcode", v.toUpperCase())} autoCapitalize="characters" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency Contact</Text>
-        <Field label="Contact Name" value={form.emergency_contact} onChangeText={(v) => set("emergency_contact", v)} autoCapitalize="words" />
-        <Field label="Contact Phone" value={form.emergency_phone} onChangeText={(v) => set("emergency_phone", v)} keyboardType="phone-pad" />
+        <Field label="Contact Name" value={form.next_of_kin_name} onChangeText={(v) => set("next_of_kin_name", v)} autoCapitalize="words" />
+        <Field label="Contact Phone" value={form.next_of_kin_phone} onChangeText={(v) => set("next_of_kin_phone", v)} keyboardType="phone-pad" />
+        <Field label="Relationship to You" value={form.next_of_kin_relationship} onChangeText={(v) => set("next_of_kin_relationship", v)} placeholder="Partner, parent, friend..." autoCapitalize="words" />
 
         <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
         {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so a

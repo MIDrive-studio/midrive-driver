@@ -27,7 +27,9 @@ export type Driver = {
   address_line2: string | null;
   city: string | null;
   postcode: string | null;
+  /** @deprecated Superseded by next_of_kin_name. Nothing reads it; do not write. */
   emergency_contact: string | null;
+  /** @deprecated Superseded by next_of_kin_phone. Nothing reads it; do not write. */
   emergency_phone: string | null;
 
   utr_number: string | null;
@@ -65,8 +67,9 @@ export type DriverProfileUpdate = {
   address_line2: string | null;
   city: string | null;
   postcode: string | null;
-  emergency_contact: string | null;
-  emergency_phone: string | null;
+  next_of_kin_name: string | null;
+  next_of_kin_phone: string | null;
+  next_of_kin_relationship: string | null;
   utr_number: string | null;
   ni_number: string | null;
   vat_registered: boolean;
