@@ -192,7 +192,7 @@ export default function DocumentStep() {
                     >
                       {sending ? <ActivityIndicator size="small" color="#ffffff" /> : null}
                       <Text className="text-base font-semibold text-white">
-                        {sending ? "Sending..." : "Send to the office"}
+                        {sending ? "Submitting..." : "Submit"}
                       </Text>
                     </Pressable>
                   )}
