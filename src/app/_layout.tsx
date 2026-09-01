@@ -6,6 +6,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { whereToSend } from "@/lib/where-to-send";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -26,54 +27,17 @@ function RootNavigator() {
       setSplashHidden(true);
     }
 
-    if (!isSignedIn && topSegment !== "login") {
-      router.replace("/login");
-      return;
-    }
+    // One function decides this, and it is tested against every combination
+    // of status, profile_status and screen -- see test:routing in the admin
+    // repo. Two rules written separately deadlocked here once already.
+    const send = whereToSend({
+      isSignedIn,
+      status: driver?.status ?? null,
+      profileStatus: driver?.profile_status ?? null,
+      segment: topSegment,
+    });
 
-    // Onboarding comes before the profile form, and replaces it.
-    //
-    // A driver who has not been cleared to work has a list of things to do that
-    // is longer than this form and partly out of their hands -- a licence the
-    // office has to look at, documents to sign, a background check nobody has
-    // run yet. Sending them to complete-profile showed them a form they could
-    // finish and then a home screen implying they were ready, while the office
-    // was still waiting on half of it.
-    //
-    // The checklist is the whole of what they see until the office activates
-    // them. It collects everything complete-profile did, and more.
-    if (isSignedIn && driver?.status === "onboarding" && topSegment !== "onboarding") {
-      router.replace("/onboarding");
-      return;
-    }
-
-    // The other way round: activated while the app was open, or on the
-    // checklist for any other reason with nothing left to do there.
-    if (isSignedIn && driver && driver.status !== "onboarding" && topSegment === "onboarding") {
-      router.replace("/(tabs)/home");
-      return;
-    }
-
-    if (isSignedIn && driver?.profile_status === "pending" && topSegment !== "complete-profile") {
-      router.replace("/complete-profile");
-      return;
-    }
-
-    // "complete-profile" is deliberately not in this list any more.
-    //
-    // profile_status is a one-time onboarding flag: it flips to "completed" the
-    // first time a driver saves the form, whether or not they filled everything
-    // in. The card on the home screen measures the actual fields instead, so it
-    // can rightly say "58% done — payroll needs your bank details" about a
-    // driver whose status says completed. Pressing its button pushed to this
-    // screen and this line threw them straight back, so the button did nothing
-    // at all and there was no way to add the missing details from the app.
-    //
-    // Onboarding still forces the screen (the branch above). This branch now
-    // only handles the two cases where the driver did not choose to be there.
-    if (isSignedIn && driver?.profile_status === "completed" && (topSegment === "login" || topSegment === undefined)) {
-      router.replace("/(tabs)/home");
-    }
+    if (send) router.replace(send as Parameters<typeof router.replace>[0]);
   }, [loading, isSignedIn, driver, topSegment, router, splashHidden]);
 
   if (loading) {
