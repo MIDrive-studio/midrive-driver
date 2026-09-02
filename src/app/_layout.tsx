@@ -1,5 +1,5 @@
 import "../global.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -15,6 +15,7 @@ function RootNavigator() {
   const segments = useSegments();
   const router = useRouter();
   const [splashHidden, setSplashHidden] = useState(false);
+  const lastSent = useRef<string | null>(null);
 
   const topSegment = segments[0] as string | undefined;
   const statusBarStyle = topSegment === "login" ? "light" : "dark";
@@ -37,7 +38,32 @@ function RootNavigator() {
       segment: topSegment,
     });
 
-    if (send) router.replace(send as Parameters<typeof router.replace>[0]);
+    // Settled: stay put, and forget where we were sent so a later move to the
+    // same place is allowed.
+    if (!send) {
+      lastSent.current = null;
+      return;
+    }
+
+    // Issuing the same navigation twice in a row is never useful, and here it
+    // was actively harmful.
+    //
+    // The decision is a pure function and it settles -- that is tested for
+    // every combination. But it is fed by useSegments(), which does not update
+    // in the same tick as router.replace(). During a transition the effect can
+    // re-run still seeing the old segment, decide on the same destination
+    // again, and issue a second navigation; that re-renders, which re-runs the
+    // effect, and so on. On a phone it showed up as the app never finishing
+    // loading, then "Maximum update depth exceeded" from react-navigation
+    // tearing screens down, and finally an OutOfMemoryError with a 512MB heap
+    // full of animation handlers from screens that kept being mounted.
+    //
+    // A settled decision clears this, so this only ever suppresses a repeat of
+    // a move already in flight -- never a genuine second move.
+    if (lastSent.current === send) return;
+
+    lastSent.current = send;
+    router.replace(send as Parameters<typeof router.replace>[0]);
   }, [loading, isSignedIn, driver, topSegment, router, splashHidden]);
 
   if (loading) {
