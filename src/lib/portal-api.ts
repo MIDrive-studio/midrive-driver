@@ -27,9 +27,46 @@ export type PortalResult<T> =
 
 const unavailable = (error: string) => ({ ok: false as const, unavailable: true as const, error });
 
-/** Long enough for a vision model that thinks, short enough that nobody wonders. */
-const TIMEOUT_MS = 30000;
+/** Long enough for a vision model that thinks, or a long document to be rendered. */
+const TIMEOUT_MS = 60000;
 
+/** The session token, or nothing when there is no session to speak of. */
+async function bearer(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+export async function portalGet<T>(path: string): Promise<PortalResult<T>> {
+  if (!BASE) return unavailable("No portal is configured for this build.");
+
+  const token = await bearer();
+  if (!token) return unavailable("Not signed in.");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!response.ok) {
+      const message = typeof payload.error === "string" ? payload.error : "That did not work.";
+      return response.status >= 500
+        ? unavailable(message)
+        : { ok: false, unavailable: false, error: message };
+    }
+
+    return { ok: true, value: payload as T };
+  } catch (error) {
+    return unavailable(error instanceof Error ? error.message : "The portal could not be reached.");
+  } finally {
+    clearTimeout(timer);
+  }
+}
 export async function portalPost<T>(path: string, body: unknown): Promise<PortalResult<T>> {
   if (!BASE) return unavailable("No portal is configured for this build.");
 
@@ -86,4 +123,44 @@ export async function readDocumentPhoto(
     mediaType: image.mediaType,
     data: image.data,
   });
+}
+
+// The company documents, and the steps of signing one.
+//
+// These go through the portal rather than straight to the database, and that
+// is not a convenience: signing renders the PDF that is the document of
+// record, stamps it with server time, and re-checks that the company is still
+// configured to issue it. An app that wrote the row itself would produce a
+// signature with no document behind it.
+
+export type DocumentSummary = {
+  template_id: string;
+  key: string;
+  title: string;
+  version: number;
+  requires_signature: boolean;
+  blocked: string | null;
+  stage: string;
+  signed_at: string | null;
+};
+
+export type DocumentContent = {
+  template_id: string;
+  title: string;
+  version: number;
+  requires_signature: boolean;
+  declaration: string | null;
+  blocks: { type: string; [key: string]: unknown }[];
+};
+
+export async function listDocuments() {
+  return portalGet<{ documents: DocumentSummary[] }>("/api/driver/documents");
+}
+
+export async function readDocument(templateId: string) {
+  return portalGet<{ document: DocumentContent }>(`/api/driver/documents/${templateId}/content`);
+}
+
+export async function documentAction(templateId: string, action: string, extra: Record<string, unknown> = {}) {
+  return portalPost<{ submission: unknown }>(`/api/driver/documents/${templateId}`, { action, ...extra });
 }
