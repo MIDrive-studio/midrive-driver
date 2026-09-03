@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { DocumentBlocks, type Block } from "@/components/document-blocks";
 import { SignaturePad } from "@/components/signature-pad";
+import { FollowUpForm, isShown, type FollowUp } from "@/components/follow-up-form";
 import { documentAction, readDocument, type DocumentContent } from "@/lib/portal-api";
 
 // Reading a document and signing it.
@@ -36,7 +37,13 @@ type Phase = "reading" | "signing" | "done";
 /** Within this many points of the bottom counts as having reached it. */
 const BOTTOM_SLACK = 48;
 
-type Question = { id: string; prompt: string; options: string[]; required?: boolean };
+type Question = {
+  id: string;
+  prompt: string;
+  options: string[];
+  required?: boolean;
+  followUp?: FollowUp;
+};
 
 export default function SignStep() {
   const router = useRouter();
@@ -48,6 +55,9 @@ export default function SignStep() {
   const [phase, setPhase] = useState<Phase>("reading");
   const [reachedEnd, setReachedEnd] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // One group is showing as soon as the answer opens the follow-up; more are
+  // added by the driver saying there was another.
+  const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
   const [declared, setDeclared] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,6 +99,7 @@ export default function SignStep() {
       prompt: String(b.prompt ?? ""),
       options: Array.isArray(b.options) ? (b.options as string[]) : ["Yes", "No"],
       required: b.required === true,
+      followUp: (b.followUp as FollowUp | undefined) ?? undefined,
     }))
     .filter((q) => q.id);
 
@@ -127,6 +138,32 @@ export default function SignStep() {
     if (viewportHeight.current > 0 && height <= viewportHeight.current + BOTTOM_SLACK) markRead();
   }
 
+  function setAnswer(key: string, value: string) {
+    setAnswers((a) => ({ ...a, [key]: value }));
+  }
+
+  function removeGroup(questionId: string, index: number) {
+    setAnswers((a) => {
+      const next: Record<string, string> = {};
+      // Renumbered as they are copied, so the groups stay 1..n with no hole
+      // where the removed one was -- a gap would print as a missing conviction.
+      const prefix = `${questionId}.`;
+      let seen = 0;
+      const count = groupCounts[questionId] ?? 1;
+      for (let n = 1; n <= count; n++) {
+        if (n === index) continue;
+        seen += 1;
+        for (const [key, value] of Object.entries(a)) {
+          if (!key.startsWith(`${prefix}${n}.`)) continue;
+          next[`${prefix}${seen}.${key.split(".")[2]}`] = value;
+        }
+      }
+      for (const [key, value] of Object.entries(a)) if (!key.startsWith(prefix)) next[key] = value;
+      return next;
+    });
+    setGroupCounts((c) => ({ ...c, [questionId]: Math.max(1, (c[questionId] ?? 1) - 1) }));
+  }
+
   async function handleSign() {
     if (!doc) return;
 
@@ -134,6 +171,25 @@ export default function SignStep() {
     if (unanswered.length > 0) {
       setError("Please answer the question in the document before signing.");
       return;
+    }
+
+    // An opened follow-up that is left blank is the thing this whole feature
+    // exists to prevent: a Yes with nothing behind it. Only fields actually on
+    // screen are required -- one hidden behind an answer that was never given
+    // is not a question the driver dodged.
+    for (const q of questions) {
+      if (!q.followUp || answers[q.id] !== q.followUp.when) continue;
+
+      for (let n = 1; n <= (groupCounts[q.id] ?? 1); n++) {
+        const group: Record<string, string> = {};
+        for (const f of q.followUp.fields) group[f.id] = answers[`${q.id}.${n}.${f.id}`] ?? "";
+
+        const missing = q.followUp.fields.filter((f) => isShown(f, group) && !group[f.id].trim());
+        if (missing.length > 0) {
+          setError(`Please finish ${q.followUp.groupNoun.toLowerCase()} ${n}: ${missing[0].label}`);
+          return;
+        }
+      }
     }
 
     if (!declared) {
@@ -283,7 +339,16 @@ export default function SignStep() {
                       return (
                         <Pressable
                           key={option}
-                          onPress={() => setAnswers((a) => ({ ...a, [q.id]: option }))}
+                          onPress={() => {
+                            setAnswer(q.id, option);
+                            // Opening the follow-up shows one group straight
+                            // away. Answering the other way leaves whatever was
+                            // typed alone rather than throwing it away -- a
+                            // mis-tap should not cost somebody four answers.
+                            if (q.followUp && option === q.followUp.when && !groupCounts[q.id]) {
+                              setGroupCounts((c) => ({ ...c, [q.id]: 1 }));
+                            }
+                          }}
                           className={`flex-1 items-center rounded-xl border py-3 ${
                             chosen ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
                           }`}
@@ -295,6 +360,20 @@ export default function SignStep() {
                       );
                     })}
                   </View>
+
+                  {q.followUp && answers[q.id] === q.followUp.when ? (
+                    <View className="mt-4">
+                      <FollowUpForm
+                        questionId={q.id}
+                        followUp={q.followUp}
+                        answers={answers}
+                        onChange={setAnswer}
+                        groupCount={groupCounts[q.id] ?? 1}
+                        onAddGroup={() => setGroupCounts((c) => ({ ...c, [q.id]: (c[q.id] ?? 1) + 1 }))}
+                        onRemoveGroup={(index) => removeGroup(q.id, index)}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               ))}
 
