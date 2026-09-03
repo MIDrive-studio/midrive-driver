@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useAuth } from "@/lib/auth-context";
@@ -209,78 +209,84 @@ export default function CompleteProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView contentContainerClassName="px-6 py-6" keyboardShouldPersistTaps="handled">
-        {!onboarding && (
-          <Pressable
-            onPress={() => router.replace("/(tabs)/home")}
-            className="mb-4 flex-row items-center gap-1.5 self-start py-1"
-          >
-            <Text className="text-sm font-medium text-slate-600">&larr; Back</Text>
-          </Pressable>
-        )}
+      {/* Measured on a device rather than assumed: with the keyboard up, this
+          form had not moved a pixel and the focused field was entirely behind
+          it. "padding" on Android as well as iOS, because nothing here resizes
+          the window, so nothing but this moves the content. */}
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
+        <ScrollView contentContainerClassName="px-6 pb-24 pt-6" keyboardShouldPersistTaps="handled">
+          {!onboarding && (
+            <Pressable
+              onPress={() => router.replace("/(tabs)/home")}
+              className="mb-4 flex-row items-center gap-1.5 self-start py-1"
+            >
+              <Text className="text-sm font-medium text-slate-600">&larr; Back</Text>
+            </Pressable>
+          )}
 
-        <Text className="mb-1 text-2xl font-bold text-slate-900">
-          {onboarding ? "Complete Your Profile" : "Your Details"}
-        </Text>
-        <Text className="mb-6 text-slate-500">
-          {onboarding
-            ? "We need a few more details before you can start using the app."
-            : "Keep these up to date. Payroll needs your bank details, UTR and NI number before it can pay you."}
-        </Text>
+          <Text className="mb-1 text-2xl font-bold text-slate-900">
+            {onboarding ? "Complete Your Profile" : "Your Details"}
+          </Text>
+          <Text className="mb-6 text-slate-500">
+            {onboarding
+              ? "We need a few more details before you can start using the app."
+              : "Keep these up to date. Payroll needs your bank details, UTR and NI number before it can pay you."}
+          </Text>
 
-        {error && (
-          <View className="mb-4 rounded-lg bg-red-50 px-4 py-3">
-            <Text className="text-sm text-red-700">{error}</Text>
+          {error && (
+            <View className="mb-4 rounded-lg bg-red-50 px-4 py-3">
+              <Text className="text-sm text-red-700">{error}</Text>
+            </View>
+          )}
+
+          <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Personal</Text>
+          <DateField label="Date of Birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+          <Field label="Nationality" value={form.nationality} onChangeText={(v) => set("nationality", v)} autoCapitalize="words" />
+          <Field label="Phone Number" value={form.phone} onChangeText={(v) => set("phone", v)} keyboardType="phone-pad" />
+
+          <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Address</Text>
+          <Field label="Address Line 1" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} autoCapitalize="words" />
+          <Field label="Address Line 2" value={form.address_line2} onChangeText={(v) => set("address_line2", v)} autoCapitalize="words" />
+          <Field label="City" value={form.city} onChangeText={(v) => set("city", v)} autoCapitalize="words" />
+          <Field label="Postcode" value={form.postcode} onChangeText={(v) => set("postcode", v.toUpperCase())} autoCapitalize="characters" />
+
+          <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency Contact</Text>
+          <Field label="Contact Name" value={form.next_of_kin_name} onChangeText={(v) => set("next_of_kin_name", v)} autoCapitalize="words" />
+          <Field label="Contact Phone" value={form.next_of_kin_phone} onChangeText={(v) => set("next_of_kin_phone", v)} keyboardType="phone-pad" />
+          <Field label="Relationship to You" value={form.next_of_kin_relationship} onChangeText={(v) => set("next_of_kin_relationship", v)} placeholder="Partner, parent, friend..." autoCapitalize="words" />
+
+          <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
+          {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so a
+              new driver cannot supply one and must not be blocked waiting for it.
+              Saying when it is needed is more use than marking it required. */}
+          <Field label="UTR Number (when you have it)" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
+          <Text className="-mt-3 mb-4 text-xs text-slate-500">
+            Leave blank if HMRC has not sent yours yet. You can add it here any time — payroll needs it
+            before it can pay you as self-employed.
+          </Text>
+          <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v.toUpperCase())} autoCapitalize="characters" maxLength={9} />
+
+          <View className="mb-4 flex-row items-center justify-between">
+            <Text className="text-sm font-medium text-slate-700">VAT Registered</Text>
+            <Switch value={form.vat_registered} onValueChange={(v) => set("vat_registered", v)} trackColor={{ true: "#f59e0b" }} />
           </View>
-        )}
+          {form.vat_registered && (
+            <Field label="VAT Number" value={form.vat_number} onChangeText={(v) => set("vat_number", v.toUpperCase())} autoCapitalize="characters" />
+          )}
 
-        <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Personal</Text>
-        <DateField label="Date of Birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
-        <Field label="Nationality" value={form.nationality} onChangeText={(v) => set("nationality", v)} autoCapitalize="words" />
-        <Field label="Phone Number" value={form.phone} onChangeText={(v) => set("phone", v)} keyboardType="phone-pad" />
+          <Field label="Bank Account Name" value={form.bank_account_name} onChangeText={(v) => set("bank_account_name", v)} autoCapitalize="words" />
+          <Field label="Sort Code" value={form.bank_sort_code} onChangeText={(v) => set("bank_sort_code", v)} keyboardType="numeric" maxLength={6} />
+          <Field label="Account Number" value={form.bank_account_number} onChangeText={(v) => set("bank_account_number", v)} keyboardType="numeric" maxLength={8} />
 
-        <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Address</Text>
-        <Field label="Address Line 1" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} autoCapitalize="words" />
-        <Field label="Address Line 2" value={form.address_line2} onChangeText={(v) => set("address_line2", v)} autoCapitalize="words" />
-        <Field label="City" value={form.city} onChangeText={(v) => set("city", v)} autoCapitalize="words" />
-        <Field label="Postcode" value={form.postcode} onChangeText={(v) => set("postcode", v.toUpperCase())} autoCapitalize="characters" />
-
-        <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency Contact</Text>
-        <Field label="Contact Name" value={form.next_of_kin_name} onChangeText={(v) => set("next_of_kin_name", v)} autoCapitalize="words" />
-        <Field label="Contact Phone" value={form.next_of_kin_phone} onChangeText={(v) => set("next_of_kin_phone", v)} keyboardType="phone-pad" />
-        <Field label="Relationship to You" value={form.next_of_kin_relationship} onChangeText={(v) => set("next_of_kin_relationship", v)} placeholder="Partner, parent, friend..." autoCapitalize="words" />
-
-        <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
-        {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so a
-            new driver cannot supply one and must not be blocked waiting for it.
-            Saying when it is needed is more use than marking it required. */}
-        <Field label="UTR Number (when you have it)" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
-        <Text className="-mt-3 mb-4 text-xs text-slate-500">
-          Leave blank if HMRC has not sent yours yet. You can add it here any time — payroll needs it
-          before it can pay you as self-employed.
-        </Text>
-        <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v.toUpperCase())} autoCapitalize="characters" maxLength={9} />
-
-        <View className="mb-4 flex-row items-center justify-between">
-          <Text className="text-sm font-medium text-slate-700">VAT Registered</Text>
-          <Switch value={form.vat_registered} onValueChange={(v) => set("vat_registered", v)} trackColor={{ true: "#f59e0b" }} />
-        </View>
-        {form.vat_registered && (
-          <Field label="VAT Number" value={form.vat_number} onChangeText={(v) => set("vat_number", v.toUpperCase())} autoCapitalize="characters" />
-        )}
-
-        <Field label="Bank Account Name" value={form.bank_account_name} onChangeText={(v) => set("bank_account_name", v)} autoCapitalize="words" />
-        <Field label="Sort Code" value={form.bank_sort_code} onChangeText={(v) => set("bank_sort_code", v)} keyboardType="numeric" maxLength={6} />
-        <Field label="Account Number" value={form.bank_account_number} onChangeText={(v) => set("bank_account_number", v)} keyboardType="numeric" maxLength={8} />
-
-        <Pressable
-          onPress={handleSubmit}
-          disabled={submitting}
-          className="mt-2 items-center rounded-lg bg-slate-900 py-3 disabled:opacity-50"
-        >
-          {submitting ? <ActivityIndicator color="white" /> : <Text className="font-semibold text-white">Save & Continue</Text>}
-        </Pressable>
-      </ScrollView>
+          <Pressable
+            onPress={handleSubmit}
+            disabled={submitting}
+            className="mt-2 items-center rounded-lg bg-slate-900 py-3 disabled:opacity-50"
+          >
+            {submitting ? <ActivityIndicator color="white" /> : <Text className="font-semibold text-white">Save & Continue</Text>}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

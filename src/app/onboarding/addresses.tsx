@@ -187,15 +187,15 @@ export default function AddressesStep() {
 
       {/* The keyboard covered the lower fields.
 
-          On iOS nothing moves unless something moves it, so padding is added
-          below the content. On Android the window itself resizes, and adding
-          padding as well pushes the content twice as far -- so the behaviour is
-          left undefined there, matching the accident report screen, which is the
-          longest form in the app and the one this pattern was proven on.
+          "padding" on both platforms, which is not what the rest of the app
+          does. The usual advice -- leave Android alone because the window
+          resizes itself -- was tested on the device and is false here: with the
+          keyboard up, the form had not moved a pixel and the focused field was
+          entirely behind it. Nothing resizes, so nothing but this moves it.
 
           The generous bottom padding is the other half: resizing only helps if
           there is somewhere for the last field to scroll to. */}
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView className="flex-1" behavior="padding">
         <ScrollView contentContainerClassName="px-5 pb-24" keyboardShouldPersistTaps="handled">
           <View
             className={`mb-5 rounded-xl border px-4 py-3 ${
