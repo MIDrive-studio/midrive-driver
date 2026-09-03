@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { useOnboarding } from "@/lib/onboarding";
+import { STEP_ROUTE } from "@/lib/next-step";
 import type { OnboardingStage, StageState } from "@/types/onboarding";
 
 // What is left before a driver can work.
@@ -18,21 +19,18 @@ const LOOK: Record<StageState, { icon: keyof typeof Feather.glyphMap; tint: stri
   complete: { icon: "check", tint: "#047857", ring: "bg-ok-surface", note: "Done" },
   waiting_driver: { icon: "arrow-right", tint: "#1f5089", ring: "bg-marine-100", note: "Your turn" },
   rejected: { icon: "alert-circle", tint: "#b91c1c", ring: "bg-bad-surface", note: "Needs doing again" },
-  waiting_admin: { icon: "clock", tint: "#b45309", ring: "bg-warn-surface", note: "With the office" },
+  waiting_admin: { icon: "clock", tint: "#b45309", ring: "bg-warn-surface", note: "Submitted" },
   locked: { icon: "lock", tint: "#94a3b8", ring: "bg-surface-sunken", note: "Not yet" },
   not_required: { icon: "minus", tint: "#94a3b8", ring: "bg-surface-sunken", note: "Not needed" },
 };
 
-// Which steps this app can open. A stage missing from here still appears on the
-// list with its state and detail; it simply does not lead anywhere yet, which
-// is the truth rather than a dead tap.
-const ROUTE: Record<string, string> = {
-  personal: "/onboarding/personal",
-  address_history: "/onboarding/addresses",
-  licence: "/onboarding/document?kind=drivers_licence",
-  right_to_work: "/onboarding/document?kind=right_to_work",
-};
 
+  // "Submitted" is only true where the driver actually sent something. The
+  // background check is the office's to obtain and the driver is never asked
+  // for it, so saying "Submitted" there would credit them with a step they
+  // cannot take -- and it sat directly above "Waiting for the office to upload
+  // it", which is the sentence it contradicted.
+  const OFFICE_OWES = new Set(["background_check"]);
 function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => void }) {
   const look = LOOK[stage.state] ?? LOOK.locked;
   const openable = Boolean(onPress);
@@ -68,7 +66,9 @@ function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => 
       {openable ? (
         <Feather name="chevron-right" size={20} color="#94a3b8" />
       ) : (
-        <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">{look.note}</Text>
+        <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {stage.state === "waiting_admin" && OFFICE_OWES.has(stage.key) ? "With the office" : look.note}
+        </Text>
       )}
     </Pressable>
   );
@@ -153,7 +153,7 @@ export default function OnboardingChecklist() {
 
         <View className="mt-5">
           {state.stages.map((stage) => {
-            const route = ROUTE[stage.key];
+            const route = STEP_ROUTE[stage.key];
             const canOpen = Boolean(route) && stage.state !== "locked" && stage.state !== "not_required";
             return (
               <StageRow
