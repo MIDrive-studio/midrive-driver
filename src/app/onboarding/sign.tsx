@@ -22,11 +22,14 @@ import { documentAction, readDocument, type DocumentContent } from "@/lib/portal
 // let somebody sign something they never opened: read to the end, answer
 // anything the document asks, then declare and sign.
 //
-// Reaching the end is recorded, not claimed. The signing controls do not exist
-// until the driver has actually scrolled through the text, and the portal
-// refuses a signature on a document it has no "read" event for -- so the button
-// appearing is a consequence of having read it rather than a promise that you
-// did.
+// The signing controls do not appear until the whole document has been shown --
+// scrolled to the end, or short enough that there was nothing to scroll. That
+// is the gate, and it is decided on the device so nothing waits on a network
+// round trip to unlock a button somebody has plainly earned.
+//
+// The server is told separately, and told again immediately before signing,
+// where it is a step that has to succeed anyway. So the record of having read
+// it is still the server's, and a signature is still refused without one.
 
 type Phase = "reading" | "signing" | "done";
 
@@ -52,6 +55,7 @@ export default function SignStep() {
 
   // Recorded once. The scroll handler fires constantly and this is a write.
   const readSent = useRef(false);
+  const viewportHeight = useRef(0);
 
   const load = useCallback(async () => {
     if (!templateId) return;
@@ -88,23 +92,39 @@ export default function SignStep() {
     }))
     .filter((q) => q.id);
 
-  async function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const atBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - BOTTOM_SLACK;
-
-    if (!atBottom || readSent.current) return;
-
+  /**
+   * Reaching the end enables the button. Nothing waits on the network.
+   *
+   * This used to enable only once the server had acknowledged the read, and
+   * put the button back to grey if that call failed -- so a driver who had
+   * plainly read the document watched the button light up and go out again,
+   * with no way to tell whether they had done something wrong.
+   *
+   * Scrolling to the end is the reading. The server is told in the background,
+   * and told again just before signing, where it is a step that has to succeed
+   * anyway. recordRead is idempotent, so saying it twice costs nothing.
+   */
+  function markRead() {
+    if (readSent.current) return;
     readSent.current = true;
     setReachedEnd(true);
-    // Recorded on the server. If this fails the driver can still scroll and
-    // try again -- but the signature will be refused, which is the right way
-    // round.
-    const result = await documentAction(templateId, "read");
-    if (!result.ok) {
-      readSent.current = false;
-      setReachedEnd(false);
-      setError(result.error);
-    }
+    documentAction(templateId, "read").catch(() => {});
+  }
+
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - BOTTOM_SLACK) markRead();
+  }
+
+  /**
+   * A document shorter than the screen has no bottom to scroll to.
+   *
+   * onScroll never fires, so the button stayed grey for ever and the shortest
+   * documents were the ones that could not be signed at all. If it all fits,
+   * it has all been shown.
+   */
+  function handleContentSize(_width: number, height: number) {
+    if (viewportHeight.current > 0 && height <= viewportHeight.current + BOTTOM_SLACK) markRead();
   }
 
   async function handleSign() {
@@ -128,6 +148,17 @@ export default function SignStep() {
 
     setBusy(true);
     setError(null);
+
+    // Said again here because this is where it has to be true. The background
+    // call may have been made on a dead connection, and the portal refuses a
+    // signature on a document it has no read event for -- which would surface
+    // as a failure at the last step rather than the first.
+    const read = await documentAction(templateId, "read");
+    if (!read.ok) {
+      setBusy(false);
+      setError(read.error);
+      return;
+    }
 
     if (questions.length > 0) {
       const answered = await documentAction(templateId, "answer", { answers });
@@ -215,6 +246,10 @@ export default function SignStep() {
         <ScrollView
           contentContainerClassName="px-5 pb-8 pt-4"
           onScroll={handleScroll}
+          onContentSizeChange={handleContentSize}
+          onLayout={(event) => {
+            viewportHeight.current = event.nativeEvent.layout.height;
+          }}
           scrollEventThrottle={200}
           keyboardShouldPersistTaps="handled"
         >
