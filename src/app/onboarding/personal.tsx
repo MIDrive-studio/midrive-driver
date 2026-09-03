@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -191,72 +191,84 @@ export default function PersonalStep() {
         <Text className="text-lg font-bold text-ink">Your details</Text>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 pb-10" keyboardShouldPersistTaps="handled">
-        <Text className="mb-5 text-sm text-ink-subtle">
-          {driver?.full_name ? `We have you as ${driver.full_name}. ` : ""}
-          Ask the office if your name needs changing.
-        </Text>
+      {/* The keyboard covered the lower fields.
 
-        <DateField label="Date of birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
-        <Field
-          label="Nationality"
-          value={form.nationality}
-          onChangeText={(v) => set("nationality", v)}
-          autoCapitalize="words"
-        />
-        <Field
-          label="Contact number"
-          value={form.phone}
-          onChangeText={(v) => set("phone", v)}
-          keyboardType="phone-pad"
-        />
-        <Field
-          label="National Insurance number"
-          value={form.ni_number}
-          onChangeText={(v) => set("ni_number", v)}
-          placeholder="QQ 12 34 56 C"
-          autoCapitalize="characters"
-          maxLength={13}
-        />
+          On iOS nothing moves unless something moves it, so padding is added
+          below the content. On Android the window itself resizes, and adding
+          padding as well pushes the content twice as far -- so the behaviour is
+          left undefined there, matching the accident report screen, which is the
+          longest form in the app and the one this pattern was proven on.
 
-        <Text className="mb-1 mt-2 text-base font-semibold text-ink">Next of kin</Text>
-        <Text className="mb-4 text-sm text-ink-subtle">Who we would call if something happened to you at work.</Text>
+          The generous bottom padding is the other half: resizing only helps if
+          there is somewhere for the last field to scroll to. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerClassName="px-5 pb-24" keyboardShouldPersistTaps="handled">
+          <Text className="mb-5 text-sm text-ink-subtle">
+            {driver?.full_name ? `We have you as ${driver.full_name}. ` : ""}
+            Ask the office if your name needs changing.
+          </Text>
 
-        <Field
-          label="Their name"
-          value={form.next_of_kin_name}
-          onChangeText={(v) => set("next_of_kin_name", v)}
-          autoCapitalize="words"
-        />
-        <Field
-          label="Their phone number"
-          value={form.next_of_kin_phone}
-          onChangeText={(v) => set("next_of_kin_phone", v)}
-          keyboardType="phone-pad"
-        />
-        <Field
-          label="How you know them"
-          value={form.next_of_kin_relationship}
-          onChangeText={(v) => set("next_of_kin_relationship", v)}
-          placeholder="Partner, parent, friend..."
-          autoCapitalize="words"
-        />
+          <DateField label="Date of birth" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+          <Field
+            label="Nationality"
+            value={form.nationality}
+            onChangeText={(v) => set("nationality", v)}
+            autoCapitalize="words"
+          />
+          <Field
+            label="Contact number"
+            value={form.phone}
+            onChangeText={(v) => set("phone", v)}
+            keyboardType="phone-pad"
+          />
+          <Field
+            label="National Insurance number"
+            value={form.ni_number}
+            onChangeText={(v) => set("ni_number", v)}
+            placeholder="QQ 12 34 56 C"
+            autoCapitalize="characters"
+            maxLength={13}
+          />
 
-        {error ? (
-          <View className="mb-4 rounded-lg border border-bad-line bg-bad-surface px-4 py-3">
-            <Text className="text-sm text-bad-strong">{error}</Text>
-          </View>
-        ) : null}
+          <Text className="mb-1 mt-2 text-base font-semibold text-ink">Next of kin</Text>
+          <Text className="mb-4 text-sm text-ink-subtle">Who we would call if something happened to you at work.</Text>
 
-        <Pressable
-          onPress={handleSave}
-          disabled={saving}
-          className="flex-row items-center justify-center gap-2 rounded-xl bg-marine-600 px-6 py-4 active:bg-marine-700 disabled:opacity-50"
-        >
-          {saving ? <ActivityIndicator size="small" color="#ffffff" /> : null}
-          <Text className="text-base font-semibold text-white">{saving ? "Saving..." : "Save"}</Text>
-        </Pressable>
-      </ScrollView>
+          <Field
+            label="Their name"
+            value={form.next_of_kin_name}
+            onChangeText={(v) => set("next_of_kin_name", v)}
+            autoCapitalize="words"
+          />
+          <Field
+            label="Their phone number"
+            value={form.next_of_kin_phone}
+            onChangeText={(v) => set("next_of_kin_phone", v)}
+            keyboardType="phone-pad"
+          />
+          <Field
+            label="How you know them"
+            value={form.next_of_kin_relationship}
+            onChangeText={(v) => set("next_of_kin_relationship", v)}
+            placeholder="Partner, parent, friend..."
+            autoCapitalize="words"
+          />
+
+          {error ? (
+            <View className="mb-4 rounded-lg border border-bad-line bg-bad-surface px-4 py-3">
+              <Text className="text-sm text-bad-strong">{error}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={handleSave}
+            disabled={saving}
+            className="flex-row items-center justify-center gap-2 rounded-xl bg-marine-600 px-6 py-4 active:bg-marine-700 disabled:opacity-50"
+          >
+            {saving ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+            <Text className="text-base font-semibold text-white">{saving ? "Saving..." : "Save"}</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

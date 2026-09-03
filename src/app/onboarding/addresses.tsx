@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -185,106 +185,118 @@ export default function AddressesStep() {
         <Text className="text-lg font-bold text-ink">Where you have lived</Text>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 pb-10" keyboardShouldPersistTaps="handled">
-        <View
-          className={`mb-5 rounded-xl border px-4 py-3 ${
-            cover.covered ? "border-ok-line bg-ok-surface" : "border-warn-line bg-warn-surface"
-          }`}
-        >
-          <Text className={`text-sm font-semibold ${cover.covered ? "text-ok-strong" : "text-warn-strong"}`}>
-            {cover.covered ? "That is seven years covered." : "We need seven years, with no gaps."}
-          </Text>
-          {!cover.covered ? (
-            <Text className="mt-1 text-sm text-ink-muted">
-              {lines.length === 0
-                ? `Start with where you live now and work backwards to ${monthYear(cover.needFrom)}.`
-                : `Covered back to ${monthYear(cover.reachedTo)}. Add where you lived before that, down to ${monthYear(cover.needFrom)}.`}
+      {/* The keyboard covered the lower fields.
+
+          On iOS nothing moves unless something moves it, so padding is added
+          below the content. On Android the window itself resizes, and adding
+          padding as well pushes the content twice as far -- so the behaviour is
+          left undefined there, matching the accident report screen, which is the
+          longest form in the app and the one this pattern was proven on.
+
+          The generous bottom padding is the other half: resizing only helps if
+          there is somewhere for the last field to scroll to. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerClassName="px-5 pb-24" keyboardShouldPersistTaps="handled">
+          <View
+            className={`mb-5 rounded-xl border px-4 py-3 ${
+              cover.covered ? "border-ok-line bg-ok-surface" : "border-warn-line bg-warn-surface"
+            }`}
+          >
+            <Text className={`text-sm font-semibold ${cover.covered ? "text-ok-strong" : "text-warn-strong"}`}>
+              {cover.covered ? "That is seven years covered." : "We need seven years, with no gaps."}
             </Text>
-          ) : null}
-        </View>
-
-        {loading ? (
-          <ActivityIndicator size="small" color="#1f5089" />
-        ) : (
-          lines.map((line) => (
-            <View key={line.id} className="mb-2 flex-row items-start gap-3 rounded-xl border border-line bg-white px-4 py-3">
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-ink">{line.address_line1}</Text>
-                {line.address_line2 || line.city || line.postcode ? (
-                  <Text className="text-sm text-ink-subtle">
-                    {[line.address_line2, line.city, line.postcode].filter(Boolean).join(", ")}
-                  </Text>
-                ) : null}
-                <Text className="mt-1 text-sm text-ink-muted">
-                  {shortDate(line.lived_from)} — {line.lived_to ? shortDate(line.lived_to) : "now"}
-                </Text>
-              </View>
-              <Pressable onPress={() => handleRemove(line.id)} hitSlop={10} className="p-1">
-                <Feather name="trash-2" size={18} color="#b91c1c" />
-              </Pressable>
-            </View>
-          ))
-        )}
-
-        {error ? (
-          <View className="my-3 rounded-lg border border-bad-line bg-bad-surface px-4 py-3">
-            <Text className="text-sm text-bad-strong">{error}</Text>
-          </View>
-        ) : null}
-
-        {adding ? (
-          <View className="mt-3 rounded-xl border border-line bg-white p-4">
-            <Field label="Address" value={form.address_line1} onChangeText={(v) => setForm((f) => ({ ...f, address_line1: v }))} autoCapitalize="words" />
-            <Field label="Address line 2 (optional)" value={form.address_line2} onChangeText={(v) => setForm((f) => ({ ...f, address_line2: v }))} autoCapitalize="words" />
-            <Field label="Town or city" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} autoCapitalize="words" />
-            <Field label="Postcode" value={form.postcode} onChangeText={(v) => setForm((f) => ({ ...f, postcode: v }))} autoCapitalize="characters" />
-            <MonthField label="Moved in" value={form.lived_from} onChange={(v) => setForm((f) => ({ ...f, lived_from: v }))} />
-
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-ink-muted">I still live here</Text>
-              <Switch
-                value={form.stillHere}
-                onValueChange={(v) => setForm((f) => ({ ...f, stillHere: v, lived_to: v ? "" : f.lived_to }))}
-                trackColor={{ true: "#1f5089", false: "#cbd5e1" }}
-              />
-            </View>
-
-            {!form.stillHere ? (
-              <MonthField label="Moved out" value={form.lived_to} onChange={(v) => setForm((f) => ({ ...f, lived_to: v }))} />
+            {!cover.covered ? (
+              <Text className="mt-1 text-sm text-ink-muted">
+                {lines.length === 0
+                  ? `Start with where you live now and work backwards to ${monthYear(cover.needFrom)}.`
+                  : `Covered back to ${monthYear(cover.reachedTo)}. Add where you lived before that, down to ${monthYear(cover.needFrom)}.`}
+              </Text>
             ) : null}
-
-            <View className="mt-1 flex-row gap-2">
-              <Pressable
-                onPress={handleAdd}
-                disabled={saving}
-                className="flex-1 items-center rounded-xl bg-marine-600 py-3 active:bg-marine-700 disabled:opacity-50"
-              >
-                <Text className="text-sm font-semibold text-white">{saving ? "Adding..." : "Add this address"}</Text>
-              </Pressable>
-              <Pressable onPress={() => setAdding(false)} className="items-center rounded-xl border border-line-strong px-4 py-3">
-                <Text className="text-sm font-semibold text-ink-muted">Cancel</Text>
-              </Pressable>
-            </View>
           </View>
-        ) : (
-          <Pressable
-            onPress={() => setAdding(true)}
-            className="mt-3 flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-4 active:bg-surface-sunken"
-          >
-            <Feather name="plus" size={18} color="#1f5089" />
-            <Text className="text-sm font-semibold text-marine-700">Add an address</Text>
-          </Pressable>
-        )}
 
-        {cover.covered ? (
-          <Pressable
-            onPress={() => router.back()}
-            className="mt-5 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700"
-          >
-            <Text className="text-base font-semibold text-white">Done</Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
+          {loading ? (
+            <ActivityIndicator size="small" color="#1f5089" />
+          ) : (
+            lines.map((line) => (
+              <View key={line.id} className="mb-2 flex-row items-start gap-3 rounded-xl border border-line bg-white px-4 py-3">
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-ink">{line.address_line1}</Text>
+                  {line.address_line2 || line.city || line.postcode ? (
+                    <Text className="text-sm text-ink-subtle">
+                      {[line.address_line2, line.city, line.postcode].filter(Boolean).join(", ")}
+                    </Text>
+                  ) : null}
+                  <Text className="mt-1 text-sm text-ink-muted">
+                    {shortDate(line.lived_from)} — {line.lived_to ? shortDate(line.lived_to) : "now"}
+                  </Text>
+                </View>
+                <Pressable onPress={() => handleRemove(line.id)} hitSlop={10} className="p-1">
+                  <Feather name="trash-2" size={18} color="#b91c1c" />
+                </Pressable>
+              </View>
+            ))
+          )}
+
+          {error ? (
+            <View className="my-3 rounded-lg border border-bad-line bg-bad-surface px-4 py-3">
+              <Text className="text-sm text-bad-strong">{error}</Text>
+            </View>
+          ) : null}
+
+          {adding ? (
+            <View className="mt-3 rounded-xl border border-line bg-white p-4">
+              <Field label="Address" value={form.address_line1} onChangeText={(v) => setForm((f) => ({ ...f, address_line1: v }))} autoCapitalize="words" />
+              <Field label="Address line 2 (optional)" value={form.address_line2} onChangeText={(v) => setForm((f) => ({ ...f, address_line2: v }))} autoCapitalize="words" />
+              <Field label="Town or city" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} autoCapitalize="words" />
+              <Field label="Postcode" value={form.postcode} onChangeText={(v) => setForm((f) => ({ ...f, postcode: v }))} autoCapitalize="characters" />
+              <MonthField label="Moved in" value={form.lived_from} onChange={(v) => setForm((f) => ({ ...f, lived_from: v }))} />
+
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-sm font-medium text-ink-muted">I still live here</Text>
+                <Switch
+                  value={form.stillHere}
+                  onValueChange={(v) => setForm((f) => ({ ...f, stillHere: v, lived_to: v ? "" : f.lived_to }))}
+                  trackColor={{ true: "#1f5089", false: "#cbd5e1" }}
+                />
+              </View>
+
+              {!form.stillHere ? (
+                <MonthField label="Moved out" value={form.lived_to} onChange={(v) => setForm((f) => ({ ...f, lived_to: v }))} />
+              ) : null}
+
+              <View className="mt-1 flex-row gap-2">
+                <Pressable
+                  onPress={handleAdd}
+                  disabled={saving}
+                  className="flex-1 items-center rounded-xl bg-marine-600 py-3 active:bg-marine-700 disabled:opacity-50"
+                >
+                  <Text className="text-sm font-semibold text-white">{saving ? "Adding..." : "Add this address"}</Text>
+                </Pressable>
+                <Pressable onPress={() => setAdding(false)} className="items-center rounded-xl border border-line-strong px-4 py-3">
+                  <Text className="text-sm font-semibold text-ink-muted">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => setAdding(true)}
+              className="mt-3 flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-4 active:bg-surface-sunken"
+            >
+              <Feather name="plus" size={18} color="#1f5089" />
+              <Text className="text-sm font-semibold text-marine-700">Add an address</Text>
+            </Pressable>
+          )}
+
+          {cover.covered ? (
+            <Pressable
+              onPress={() => router.back()}
+              className="mt-5 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700"
+            >
+              <Text className="text-base font-semibold text-white">Done</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
