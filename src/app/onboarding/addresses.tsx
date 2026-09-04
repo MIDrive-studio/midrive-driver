@@ -7,6 +7,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { addressCover, monthYear, shortDate, type AddressLine } from "@/lib/address-cover";
+import { lookupPostcode, type PickableAddress } from "@/lib/portal-api";
 
 // Seven years of addresses, with no gaps.
 //
@@ -96,6 +97,9 @@ export default function AddressesStep() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const [found, setFound] = useState<PickableAddress[] | null>(null);
+  const [lookupNote, setLookupNote] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     address_line1: "",
@@ -125,6 +129,49 @@ export default function AddressesStep() {
   }, [load]);
 
   const cover = addressCover(lines);
+
+  /**
+   * What the postcode can tell us, which is more on some days than others.
+   *
+   * The door numbers are licensed data, so whether a list comes back depends
+   * on what the office pays for. Everything here degrades rather than fails:
+   * a list to pick from if there is one, the town filled in if not, and the
+   * fields typed by hand if the service cannot be reached at all. None of
+   * those outcomes stops somebody entering an address, because an address
+   * they cannot enter is an onboarding they cannot finish.
+   */
+  async function handleLookup() {
+    setLooking(true);
+    setError(null);
+    setFound(null);
+    setLookupNote(null);
+
+    const result = await lookupPostcode(form.postcode.trim());
+    setLooking(false);
+
+    if (!result.ok) {
+      setLookupNote(
+        result.unavailable
+          ? "We could not check that just now. Type the address in below."
+          : result.error
+      );
+      return;
+    }
+
+    const { lookup } = result.value;
+    setForm((f) => ({ ...f, postcode: lookup.postcode, city: f.city || (lookup.city ?? "") }));
+
+    if (lookup.hasAddresses) {
+      setFound(lookup.addresses);
+      return;
+    }
+
+    setLookupNote(
+      lookup.city
+        ? `Postcode found. We think that is ${lookup.city} -- change it if not, and add the street below.`
+        : "Postcode found. Add the street and number below."
+    );
+  }
 
   async function handleAdd() {
     if (!driver) return;
@@ -162,6 +209,8 @@ export default function AddressesStep() {
     }
 
     setForm({ address_line1: "", address_line2: "", city: "", postcode: "", lived_from: "", lived_to: "", stillHere: false });
+    setFound(null);
+    setLookupNote(null);
     setAdding(false);
     await load();
   }
@@ -245,10 +294,62 @@ export default function AddressesStep() {
 
           {adding ? (
             <View className="mt-3 rounded-xl border border-line bg-white p-4">
+              {/* Postcode first, because it is the short thing somebody knows
+                  by heart and everything else can often be got from it. The
+                  fields below stay editable either way -- a lookup that fills
+                  them in is saving typing, not deciding the answer. */}
+              <Text className="mb-1 text-sm font-medium text-ink-muted">Postcode</Text>
+              <View className="mb-3 flex-row gap-2">
+                <TextInput
+                  value={form.postcode}
+                  onChangeText={(v) => {
+                    setForm((f) => ({ ...f, postcode: v }));
+                    setFound(null);
+                    setLookupNote(null);
+                  }}
+                  autoCapitalize="characters"
+                  placeholder="NN1 4LN"
+                  className="flex-1 rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
+                />
+                <Pressable
+                  onPress={handleLookup}
+                  disabled={looking || !form.postcode.trim()}
+                  className="items-center justify-center rounded-lg bg-marine-600 px-4 active:bg-marine-700 disabled:opacity-40"
+                >
+                  <Text className="text-sm font-semibold text-white">{looking ? "..." : "Find"}</Text>
+                </Pressable>
+              </View>
+
+              {lookupNote ? <Text className="mb-3 -mt-1 text-sm text-ink-subtle">{lookupNote}</Text> : null}
+
+              {found && found.length > 0 ? (
+                <View className="mb-4">
+                  <Text className="mb-2 text-sm font-medium text-ink-muted">Pick your address</Text>
+                  {found.map((a, index) => (
+                    <Pressable
+                      key={`${a.line1}-${index}`}
+                      onPress={() => {
+                        setForm((f) => ({
+                          ...f,
+                          address_line1: a.line1,
+                          address_line2: a.line2 ?? "",
+                          city: a.city ?? f.city,
+                          postcode: a.postcode,
+                        }));
+                        setFound(null);
+                        setLookupNote("Change anything below if it is not quite right.");
+                      }}
+                      className="mb-1.5 rounded-lg border border-line-strong bg-white px-3 py-3 active:bg-surface-sunken"
+                    >
+                      <Text className="text-[15px] text-ink">{a.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
               <Field label="Address" value={form.address_line1} onChangeText={(v) => setForm((f) => ({ ...f, address_line1: v }))} autoCapitalize="words" />
               <Field label="Address line 2 (optional)" value={form.address_line2} onChangeText={(v) => setForm((f) => ({ ...f, address_line2: v }))} autoCapitalize="words" />
               <Field label="Town or city" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} autoCapitalize="words" />
-              <Field label="Postcode" value={form.postcode} onChangeText={(v) => setForm((f) => ({ ...f, postcode: v }))} autoCapitalize="characters" />
               <MonthField label="Moved in" value={form.lived_from} onChange={(v) => setForm((f) => ({ ...f, lived_from: v }))} />
 
               <View className="mb-3 flex-row items-center justify-between">

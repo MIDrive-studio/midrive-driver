@@ -164,3 +164,31 @@ export async function readDocument(templateId: string) {
 export async function documentAction(templateId: string, action: string, extra: Record<string, unknown> = {}) {
   return portalPost<{ submission: unknown }>(`/api/driver/documents/${templateId}`, { action, ...extra });
 }
+// Finding an address from a postcode.
+//
+// The list of door numbers at a postcode is Royal Mail data and licensed, so
+// whether one comes back depends on what the portal has been given a key for.
+// Without one the postcode is still checked and the town still suggested,
+// which is most of the typing saved; with one the driver picks a line and
+// types nothing at all.
+
+export type PickableAddress = {
+  line1: string;
+  line2: string | null;
+  city: string | null;
+  postcode: string;
+  label: string;
+};
+
+export type PostcodeLookup = {
+  postcode: string;
+  city: string | null;
+  county: string | null;
+  addresses: PickableAddress[];
+  /** False means the postcode is real but nobody told us what is on the street. */
+  hasAddresses: boolean;
+};
+
+export async function lookupPostcode(postcode: string) {
+  return portalPost<{ lookup: PostcodeLookup }>("/api/driver/postcode", { postcode });
+}
