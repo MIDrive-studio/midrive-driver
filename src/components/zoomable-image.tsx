@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image, Modal, Pressable, Text, View, useWindowDimensions } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 
@@ -101,6 +101,7 @@ function Viewer({
       savedY.value = y.value;
     });
 
+
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -135,6 +136,10 @@ function Viewer({
         onClose();
       }}
     >
+      {/* Its own root, because a Modal is a separate native view hierarchy.
+          The GestureHandlerRootView at the top of the app does not reach in
+          here, and without this every gesture inside silently does nothing. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="flex-1 bg-black">
         <GestureDetector gesture={gesture}>
           <Animated.View className="flex-1 items-center justify-center" collapsable={false}>
@@ -162,6 +167,7 @@ function Viewer({
           <Text className="text-center text-xs text-white/50">Pinch or double tap to zoom</Text>
         </View>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
