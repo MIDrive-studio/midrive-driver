@@ -67,7 +67,7 @@ function StageRow({ stage, onPress }: { stage: OnboardingStage; onPress?: () => 
         <Feather name="chevron-right" size={20} color="#94a3b8" />
       ) : (
         <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {stage.state === "waiting_admin" && OFFICE_OWES.has(stage.key) ? "With the office" : look.note}
+          {stage.state === "waiting_admin" && OFFICE_OWES.has(stage.key) ? "Pending" : look.note}
         </Text>
       )}
     </Pressable>

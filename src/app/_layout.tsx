@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { whereToSend } from "@/lib/where-to-send";
@@ -147,10 +148,16 @@ export default function RootLayout() {
   // it was adding zero. Screens using <SafeAreaView> got away with it because
   // the navigator supplies its own context to them; the hook had none.
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </SafeAreaProvider>
+    // GestureHandlerRootView is what makes react-native-gesture-handler work at
+    // all on Android. The library was already a dependency and this was never
+    // mounted, so any gesture built on it would simply have done nothing --
+    // silently, which is the hard kind to diagnose.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

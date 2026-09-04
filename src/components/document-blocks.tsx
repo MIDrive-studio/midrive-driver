@@ -1,4 +1,5 @@
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { ZoomableImage } from "@/components/zoomable-image";
 
 // A company document, laid out for reading on a phone.
 //
@@ -83,13 +84,10 @@ function Figure({ asset }: { asset: string }) {
     );
   }
 
-  return (
-    <Image
-      source={{ uri: `${FIGURE_BASE}/${encodeURIComponent(asset)}` }}
-      className="mb-4 h-72 w-full"
-      resizeMode="contain"
-    />
-  );
+  // Several of these are scans of forms. At the width of a phone they are a
+  // picture of some words rather than words, and the driver is being asked to
+  // read and sign them.
+  return <ZoomableImage uri={`${FIGURE_BASE}/${encodeURIComponent(asset)}`} caption={asset} />;
 }
 
 export function DocumentBlocks({ blocks }: { blocks: Block[] }) {
