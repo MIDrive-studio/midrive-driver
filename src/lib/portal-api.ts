@@ -201,3 +201,14 @@ export type PostcodeLookup = {
 export async function lookupPostcode(postcode: string) {
   return portalPost<{ lookup: PostcodeLookup }>("/api/driver/postcode", { postcode });
 }
+
+/**
+ * Addresses matching what has been typed so far.
+ *
+ * Free and keyless behind the portal -- OpenStreetMap rather than Royal Mail --
+ * so coverage is good rather than complete. An empty list is an ordinary
+ * answer, not a failure, and the form stays typeable either way.
+ */
+export async function searchAddresses(query: string) {
+  return portalPost<{ addresses: PickableAddress[] }>("/api/driver/address-search", { query });
+}

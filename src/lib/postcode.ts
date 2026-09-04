@@ -16,14 +16,19 @@ const COMPLETE = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
 /**
  * What to show in the field after each keystroke.
  *
- * Deliberately forgiving while it is short: "NN1" is a postcode somebody is
- * halfway through typing, not an error, and reformatting it under their
- * fingers would fight them. The space only appears once there is an inward
- * code to put it in front of.
+ * The space goes in only once the postcode is complete, and that is not
+ * fussiness. The inward code is always three characters but the outward code
+ * is two to four, so until the whole thing is there you cannot know where the
+ * split falls. Splitting anyway put "NN 14L" on screen while somebody was
+ * typing NN1 4LN -- the space landing after the wrong letter and jumping when
+ * the next one arrived.
+ *
+ * So it stays unspaced while it is being typed, which is how people type them
+ * anyway, and formats itself the moment it is a postcode.
  */
 export function formatAsTyped(raw: string): string {
   const bare = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 7);
-  if (bare.length <= 3) return bare;
+  if (!COMPLETE.test(bare)) return bare;
   return `${bare.slice(0, -3)} ${bare.slice(-3)}`;
 }
 

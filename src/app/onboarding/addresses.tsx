@@ -7,7 +7,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { addressCover, monthYear, shortDate, type AddressLine } from "@/lib/address-cover";
-import { lookupPostcode, type PickableAddress } from "@/lib/portal-api";
+import { lookupPostcode, searchAddresses, type PickableAddress } from "@/lib/portal-api";
 import { formatAsTyped, isComplete } from "@/lib/postcode";
 
 // Seven years of addresses, with no gaps.
@@ -98,13 +98,15 @@ export default function AddressesStep() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [looking, setLooking] = useState(false);
-  const [found, setFound] = useState<PickableAddress[] | null>(null);
-  const [lookupNote, setLookupNote] = useState<string | null>(null);
-  // The address the driver picked. Held so that changing the postcode
-  // afterwards can throw it away: an address chosen for one postcode is not an
-  // address at another, and leaving it there is how somebody ends up filed at
-  // a house they have never been to.
+  const [search, setSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<PickableAddress[] | null>(null);
+  const [searchNote, setSearchNote] = useState<string | null>(null);
+  // Counts searches so a slow older one can be told from the current one.
+  const searchSeq = useRef(0);
+  // The record the driver picked. Held so that what gets stored can be checked
+  // against it -- editing a field afterwards means the components no longer
+  // describe the address, and stale parts are worse than none.
   const [chosen, setChosen] = useState<PickableAddress | null>(null);
   // Which postcode the list on screen belongs to, so a stale answer arriving
   // late cannot overwrite a newer one.
@@ -152,110 +154,108 @@ export default function AddressesStep() {
   const cover = addressCover(lines);
 
   /**
-   * The postcode changed.
+   * Searching, on a pause rather than a keystroke.
    *
-   * Formatting happens on the keystroke because the rule is fixed -- the
-   * inward code is the last three characters -- and the lookup happens only
-   * once there is a whole postcode to look up. Typing "N", "NN", "NN1" must
-   * not be three requests to a service that bills per request.
-   */
-  function onPostcodeChange(raw: string) {
-    const formatted = formatAsTyped(raw);
-    setForm((f) => ({ ...f, postcode: formatted }));
-    setError(null);
-
-    // Anything chosen belonged to the old postcode. An address selected for
-    // one postcode is not an address at another, and quietly keeping it is how
-    // somebody ends up filed at a house they have never been to.
-    if (chosen && formatted !== chosen.postcode) {
-      setChosen(null);
-      setForm((f) => ({ ...f, address_line1: "", address_line2: "", city: "", county: "" }));
-    }
-
-    if (formatted !== lookedUp.current) {
-      setFound(null);
-      setLookupNote(null);
-    }
-
-    if (isComplete(formatted)) {
-      runLookup(formatted);
-    } else if (formatted.length > 0) {
-      setLookupNote("Keep going -- we will look it up once the postcode is complete.");
-    }
-  }
-
-  /**
-   * What the postcode can tell us, which is more on some days than others.
+   * There is no minimum length. "1" is a search and so is "14 Luton Road
+   * Dunstable"; the results narrow because the query got more specific, not
+   * because a character count let it through.
    *
-   * The door numbers are licensed data, so whether a list comes back depends
-   * on what the office pays for. Everything here degrades rather than fails:
-   * a list to pick from if there is one, the town filled in if not, and the
-   * fields typed by hand if the service cannot be reached at all. None of
-   * those outcomes stops somebody entering an address, because an address
-   * they cannot enter is an onboarding they cannot finish.
+   * What keeps that inside OpenStreetMap's usage policy is this timer and the
+   * throttle on the server. A request follows a pause in typing, not a letter,
+   * so somebody typing an address quickly makes one request rather than
+   * twenty.
    */
-  async function runLookup(postcode: string) {
-    // Asked for already, and the answer is on screen.
-    if (lookedUp.current === postcode && found) return;
+  useEffect(() => {
+    const query = search.trim();
 
-    lookedUp.current = postcode;
-    setLooking(true);
-    setFound(null);
-    setLookupNote(null);
+    if (query === "") {
+      setSuggestions(null);
+      setSearchNote(null);
+      return;
+    }
 
-    const result = await lookupPostcode(postcode);
+    const timer = setTimeout(() => {
+      runSearch(query);
+    }, 350);
 
-    // A slower earlier request landing after a newer one would put the wrong
-    // street on screen, so a stale answer is dropped rather than shown.
-    if (lookedUp.current !== postcode) return;
+    // Typing again before the timer fires cancels it, which is why holding a
+    // key down does not queue a request per repeat.
+    return () => clearTimeout(timer);
+  }, [search]);
 
-    setLooking(false);
+  async function runSearch(query: string) {
+    // Marks this as the newest search. Anything older that lands after it is
+    // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
+    // not end with the first answer overwriting the second.
+    const mine = ++searchSeq.current;
+
+    setSearching(true);
+    const result = await searchAddresses(query);
+
+    if (mine !== searchSeq.current) return;
+
+    setSearching(false);
 
     if (!result.ok) {
-      setLookupNote(
+      setSuggestions(null);
+      setSearchNote(
         result.unavailable
-          ? "We could not check that just now. Type the address in below."
+          ? "Address search is not available just now. Type the address in below."
           : result.error
       );
       return;
     }
 
-    const { lookup } = result.value;
-    setForm((f) => ({
-      ...f,
-      postcode: lookup.postcode,
-      city: f.city || (lookup.city ?? ""),
-      county: f.county || (lookup.county ?? ""),
-    }));
-
-    if (lookup.hasAddresses) {
-      setFound(lookup.addresses);
-      setLookupNote(null);
-      return;
-    }
-
-    // A real postcode with nothing behind it is a different thing from a
-    // postcode that does not exist, and the driver has to be told which.
-    setLookupNote(
-      lookup.city
-        ? `Postcode found. We think that is ${lookup.city} -- change it if not, and add the street below.`
-        : "Postcode found. Add the street and number below."
-    );
+    const { addresses } = result.value;
+    setSuggestions(addresses);
+    // Said plainly. Open data does not have every house, and a driver whose
+    // address is missing needs to know to type it rather than keep trying.
+    setSearchNote(addresses.length === 0 ? "No match. Type the address in below." : null);
   }
 
-  /** Everything the provider knew, onto the form, in one go. */
+  /** Everything the record held, onto the form, in one go. */
   function pick(address: PickableAddress) {
     setChosen(address);
-    setFound(null);
-    setLookupNote(null);
+    setSuggestions(null);
+    setSearchNote(null);
+    setSearch("");
     setForm((f) => ({
       ...f,
       address_line1: address.line1,
       address_line2: address.line2 ?? "",
       city: address.city ?? "",
       county: address.county ?? "",
-      postcode: address.postcode,
+      // Never overwritten with an empty one: plenty of OSM records have no
+      // postcode, and blanking what the driver typed would be a step back.
+      postcode: address.postcode || f.postcode,
     }));
+  }
+
+  /**
+   * The postcode, typed by hand.
+   *
+   * Kept for the driver whose house is not in OpenStreetMap: it formats the
+   * postcode and fills in the town, which is most of the typing saved even
+   * when the search found nothing.
+   */
+  function onPostcodeChange(raw: string) {
+    const formatted = formatAsTyped(raw);
+    setForm((f) => ({ ...f, postcode: formatted }));
+    setError(null);
+
+    if (isComplete(formatted) && formatted !== lookedUp.current) {
+      lookedUp.current = formatted;
+      lookupPostcode(formatted).then((result) => {
+        if (!result.ok) return;
+        const { lookup } = result.value;
+        setForm((f) => ({
+          ...f,
+          postcode: lookup.postcode,
+          city: f.city || (lookup.city ?? ""),
+          county: f.county || (lookup.county ?? ""),
+        }));
+      });
+    }
   }
   async function handleAdd() {
     if (!driver) return;
@@ -275,12 +275,17 @@ export default function AddressesStep() {
     }
 
     // Whether what is in the form is still the record that was selected.
+    //
+    // The postcode is compared only when the record had one. Plenty of
+    // OpenStreetMap entries do not, and a driver typing in the missing
+    // postcode has completed the address rather than changed which house it
+    // is -- dropping the components for that would punish them for helping.
     const stillMatches =
       chosen !== null &&
       chosen.line1 === form.address_line1.trim() &&
       (chosen.line2 ?? "") === form.address_line2.trim() &&
       (chosen.city ?? "") === form.city.trim() &&
-      chosen.postcode === form.postcode.trim();
+      (chosen.postcode === "" || chosen.postcode === form.postcode.trim());
 
     setSaving(true);
     const { error: addError } = await supabase.from("driver_address_history").insert({
@@ -311,8 +316,9 @@ export default function AddressesStep() {
     }
 
     setForm(EMPTY_FORM);
-    setFound(null);
-    setLookupNote(null);
+    setSearch("");
+    setSuggestions(null);
+    setSearchNote(null);
     setChosen(null);
     lookedUp.current = "";
     setAdding(false);
@@ -398,64 +404,78 @@ export default function AddressesStep() {
 
           {adding ? (
             <View className="mt-3 rounded-xl border border-line bg-white p-4">
-              {/* Postcode first, because it is the short thing somebody knows
-                  by heart and everything else can often be got from it. The
-                  fields below stay editable either way -- a lookup that fills
-                  them in is saving typing, not deciding the answer. */}
-              <Text className="mb-1 text-sm font-medium text-ink-muted">Postcode</Text>
+              {/* Search first, and anything at all is a search: a number, a
+                  street, a town, a postcode, or all of them. The fields below
+                  stay editable throughout -- a suggestion that fills them in is
+                  saving typing, not deciding the answer. */}
+              <Text className="mb-1 text-sm font-medium text-ink-muted">Find your address</Text>
               <TextInput
-                value={form.postcode}
-                onChangeText={onPostcodeChange}
-                autoCapitalize="characters"
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="words"
                 autoCorrect={false}
-                placeholder="NN1 4LN"
-                className="mb-2 rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
+                placeholder="Start typing, e.g. 14 Luton Road"
+                className="rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
               />
 
-              {looking ? (
-                <View className="mb-3 flex-row items-center gap-2">
+              {searching ? (
+                <View className="mb-3 mt-2 flex-row items-center gap-2">
                   <ActivityIndicator size="small" color="#1f5089" />
-                  <Text className="text-sm text-ink-subtle">Looking up addresses...</Text>
+                  <Text className="text-sm text-ink-subtle">Searching...</Text>
                 </View>
-              ) : lookupNote ? (
-                <Text className="mb-3 text-sm text-ink-subtle">{lookupNote}</Text>
+              ) : searchNote ? (
+                <Text className="mb-3 mt-2 text-sm text-ink-subtle">{searchNote}</Text>
               ) : null}
 
-              {/* The list. Shown only while there is a choice to make: once an
-                  address is picked it is replaced by the filled-in fields, so
-                  the screen never shows both a question and its answer. */}
-              {found && found.length > 0 ? (
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-medium text-ink-muted">
-                    {found.length} {found.length === 1 ? "address" : "addresses"} at this postcode
-                  </Text>
-                  <View className="overflow-hidden rounded-xl border border-line-strong">
-                    {found.map((a, index) => (
-                      <Pressable
-                        key={`${a.label}-${index}`}
-                        onPress={() => pick(a)}
-                        className={`bg-white px-3 py-3 active:bg-marine-50 ${index ? "border-t border-line" : ""}`}
-                      >
-                        <Text className="text-[15px] text-ink">{a.label}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+              {/* Directly under the field, as a dropdown reads. Each row is a
+                  full-width target because this is used with a thumb. */}
+              {suggestions && suggestions.length > 0 ? (
+                <View className="mb-4 mt-2 overflow-hidden rounded-xl border border-line-strong">
+                  {suggestions.map((a, index) => (
+                    <Pressable
+                      key={`${a.label}-${index}`}
+                      onPress={() => pick(a)}
+                      className={`bg-white px-3 py-3.5 active:bg-marine-50 ${index ? "border-t border-line" : ""}`}
+                    >
+                      <Text className="text-[15px] text-ink">{a.line1}</Text>
+                      <Text className="mt-0.5 text-sm text-ink-subtle">
+                        {[a.city, a.county, a.postcode].filter(Boolean).join(", ")}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               ) : null}
 
               {chosen ? (
-                <View className="mb-4 flex-row items-start gap-2 rounded-lg border border-ok-line bg-ok-surface px-3 py-2.5">
+                <View className="mb-4 mt-2 flex-row items-start gap-2 rounded-lg border border-ok-line bg-ok-surface px-3 py-2.5">
                   <Feather name="check" size={16} color="#047857" style={{ marginTop: 2 }} />
                   <Text className="flex-1 text-sm text-ok-strong">
-                    Selected. Change the postcode above to pick a different address.
+                    Filled in below. Change anything that is not right, or search again.
                   </Text>
                 </View>
               ) : null}
+
+              <View className="mb-4 mt-1 h-px bg-line" />
 
               <Field label="Address" value={form.address_line1} onChangeText={(v) => setForm((f) => ({ ...f, address_line1: v }))} autoCapitalize="words" />
               <Field label="Address line 2 (optional)" value={form.address_line2} onChangeText={(v) => setForm((f) => ({ ...f, address_line2: v }))} autoCapitalize="words" />
               <Field label="Town or city" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} autoCapitalize="words" />
               <Field label="County (optional)" value={form.county} onChangeText={(v) => setForm((f) => ({ ...f, county: v }))} autoCapitalize="words" />
+
+              {/* Typed rather than searched. It still formats itself and
+                  fills in the town, which is most of the typing saved for
+                  somebody whose address is not in the map. */}
+              <View className="mb-3">
+                <Text className="mb-1 text-sm font-medium text-ink-muted">Postcode</Text>
+                <TextInput
+                  value={form.postcode}
+                  onChangeText={onPostcodeChange}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  placeholder="NN1 4LN"
+                  className="rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
+                />
+              </View>
               <MonthField label="Moved in" value={form.lived_from} onChange={(v) => setForm((f) => ({ ...f, lived_from: v }))} />
 
               <View className="mb-3 flex-row items-center justify-between">
