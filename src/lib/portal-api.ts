@@ -176,7 +176,16 @@ export type PickableAddress = {
   line1: string;
   line2: string | null;
   city: string | null;
+  county: string | null;
   postcode: string;
+
+  // The parts, where the provider gave them. Null throughout for an address
+  // from anywhere else.
+  buildingNumber: string | null;
+  buildingName: string | null;
+  street: string | null;
+
+  /** The whole thing on one line, for the list the driver picks from. */
   label: string;
 };
 
