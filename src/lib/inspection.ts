@@ -1,4 +1,5 @@
 import * as ImageManipulator from "expo-image-manipulator";
+import { bytesOf, looksLikeJpeg } from "@/lib/local-file";
 import { supabase } from "@/lib/supabase";
 import type { CapturedPhoto, InspectionPosition, VehicleCheckContext } from "@/types/inspection";
 
@@ -60,8 +61,7 @@ export async function prepareCapture(
     format: ImageManipulator.SaveFormat.JPEG,
   });
 
-  const response = await fetch(resized.uri);
-  const bytes = (await response.arrayBuffer()).byteLength;
+  const bytes = (await bytesOf(resized.uri)).byteLength;
 
   return {
     position,
@@ -130,8 +130,14 @@ export async function uploadCapture(
 ): Promise<void> {
   const path = `${companyId}/${inspectionId}/${photo.position}.jpg`;
 
-  const response = await fetch(photo.uri);
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = await bytesOf(photo.uri);
+
+  // Checked before it is sent. A walk-around photograph that did not read back
+  // is a photograph the office will open and find blank, long after the van
+  // has gone out.
+  if (!looksLikeJpeg(bytes)) {
+    throw new Error(`The ${photo.position} photo did not save properly. Please take it again.`);
+  }
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)

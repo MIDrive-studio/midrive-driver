@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { bytesOf, looksLikeJpeg } from "@/lib/local-file";
 import {
   ActivityIndicator,
   Alert,
@@ -247,8 +248,15 @@ export default function AccidentScreen() {
       try {
         const extension = item.media_type === "video" ? "mp4" : "jpg";
         const path = `${report.site_id}/${report.id}/${Date.now()}-${index}.${extension}`;
-        const response = await fetch(item.uri);
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await bytesOf(item.uri);
+
+        // A photograph is checked; a video is only checked for being there,
+        // since its first bytes vary by container and this is evidence of an
+        // accident -- refusing one for failing a format guess would be worse
+        // than storing something odd.
+        if (item.media_type === "video" ? bytes.length < 1024 : !looksLikeJpeg(bytes)) {
+          throw new Error("That attachment did not save properly.");
+        }
 
         const { error: uploadError } = await supabase.storage
           .from("accident-evidence")
