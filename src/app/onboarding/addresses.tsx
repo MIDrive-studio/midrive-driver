@@ -178,6 +178,13 @@ export default function AddressesStep() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** The best postcode we hold for where this driver is likely to be. */
+  function hintPostcode(): string | undefined {
+    if (isComplete(form.postcode)) return form.postcode;
+    // lines is newest first, so this is the most recent address they gave.
+    return lines.find((l) => l.postcode)?.postcode ?? undefined;
+  }
+
   async function runSearch(query: string) {
     // Marks this as the newest search. Anything older that lands after it is
     // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
@@ -185,7 +192,15 @@ export default function AddressesStep() {
     const mine = ++searchSeq.current;
 
     setSearching(true);
-    const result = await searchAddresses(query);
+    // Roughly where to look.
+    //
+    // "67 Chiltern" on its own matches eight streets in eight counties and
+    // offers the driver none of the right one. The postcode on the form is the
+    // best hint when it is there; the last address they entered is the next
+    // best, because people move locally more often than not. It only ever
+    // reorders the results -- an address at the other end of the country is
+    // still found.
+    const result = await searchAddresses(query, hintPostcode());
 
     if (mine !== searchSeq.current) return;
 
