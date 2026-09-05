@@ -32,7 +32,12 @@ import { documentAction, readDocument, type DocumentContent } from "@/lib/portal
 // where it is a step that has to succeed anyway. So the record of having read
 // it is still the server's, and a signature is still refused without one.
 
-type Phase = "reading" | "signing" | "done";
+// Reading and signing used to be two screens with a Continue button between
+// them. That put a question to the driver twice -- once as a preview they
+// could not answer, then again on the far side of the button -- and made them
+// press Continue to reach a signature they had already earned by reading. One
+// screen now: read it, answer what it asks, sign. The gate is unchanged.
+type Phase = "reading" | "done";
 
 /** Within this many points of the bottom counts as having reached it. */
 const BOTTOM_SLACK = 48;
@@ -104,6 +109,16 @@ export default function SignStep() {
     .filter((q) => q.id);
 
   /**
+   * Questions this document insists on before it will take a signature.
+   *
+   * The same test the submit path uses, written once. A screen that offers a
+   * signature the submit path then refuses is worse than either rule alone,
+   * and that is what two copies of this eventually become.
+   */
+  const unansweredRequired = questions.filter((q) => q.required !== false && !answers[q.id]);
+  const readyToSign = unansweredRequired.length === 0;
+
+  /**
    * Reaching the end enables the button. Nothing waits on the network.
    *
    * This used to enable only once the server had acknowledged the read, and
@@ -167,8 +182,7 @@ export default function SignStep() {
   async function handleSign() {
     if (!doc) return;
 
-    const unanswered = questions.filter((q) => q.required !== false && !answers[q.id]);
-    if (unanswered.length > 0) {
+    if (unansweredRequired.length > 0) {
       setError("Please answer the question in the document before signing.");
       return;
     }
@@ -287,7 +301,7 @@ export default function SignStep() {
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 border-b border-line px-4 py-3">
         <Pressable
-          onPress={() => (phase === "signing" ? setPhase("reading") : router.back())}
+          onPress={() => router.back()}
           hitSlop={12}
           className="p-1"
         >
@@ -302,58 +316,59 @@ export default function SignStep() {
         <ScrollView
           contentContainerClassName="px-5 pb-8 pt-4"
           onScroll={handleScroll}
+          // Also on the way out of a scroll, not only during one.
+          //
+          // Throttled onScroll can miss the resting position entirely: a flick
+          // that comes to rest between two windows reports nothing further, and
+          // the driver sits at the bottom of the document watching a grey
+          // button. These two always fire once the movement is over, so the
+          // final position is tested whatever the throttle did.
+          onMomentumScrollEnd={handleScroll}
+          onScrollEndDrag={handleScroll}
           onContentSizeChange={handleContentSize}
           onLayout={(event) => {
             viewportHeight.current = event.nativeEvent.layout.height;
           }}
-          scrollEventThrottle={200}
+          // One event per frame rather than one per fifth of a second. The
+          // handler compares four numbers and sets a boolean, and markRead is
+          // guarded by a ref so the write happens once however often this runs.
+          // At 200ms the button could lag a fifth of a second behind the finger,
+          // which is exactly long enough to read as broken.
+          scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
         >
-          {phase === "reading" ? (
-            <>
-              <DocumentBlocks blocks={doc.blocks as Block[]} />
-
-              <View className="mt-6 rounded-xl border border-line bg-white px-4 py-4">
-                <Text className="text-sm text-ink-muted">
-                  {reachedEnd
-                    ? "That is the end of the document."
-                    : "Scroll to the end of the document to continue."}
-                </Text>
-                <Pressable
-                  onPress={() => setPhase("signing")}
-                  disabled={!reachedEnd}
-                  className="mt-3 items-center rounded-xl bg-marine-600 py-3.5 active:bg-marine-700 disabled:opacity-40"
-                >
-                  <Text className="text-base font-semibold text-white">Continue</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <>
-              {questions.map((q) => (
-                <View key={q.id} className="mb-5">
-                  <Text className="mb-2 text-[15px] font-semibold leading-6 text-ink">{q.prompt}</Text>
+          <DocumentBlocks
+            blocks={doc.blocks as Block[]}
+            // The question is answered where the document asks it. Everything
+            // needed to answer is already in scope here, so the document keeps
+            // its own order and the driver is asked once.
+            renderQuestion={(block) => {
+              const question = questions.find((q) => q.id === block.id);
+              if (!question) return null;
+              return (
+                <View className="mb-5 rounded-xl border border-line bg-white px-4 py-4">
+                  <Text className="mb-3 text-[15px] font-semibold leading-6 text-ink">{question.prompt}</Text>
                   <View className="flex-row gap-2">
-                    {q.options.map((option) => {
-                      const chosen = answers[q.id] === option;
+                    {question.options.map((option) => {
+                      const picked = answers[question.id] === option;
                       return (
                         <Pressable
                           key={option}
                           onPress={() => {
-                            setAnswer(q.id, option);
+                            setAnswer(question.id, option);
                             // Opening the follow-up shows one group straight
                             // away. Answering the other way leaves whatever was
                             // typed alone rather than throwing it away -- a
                             // mis-tap should not cost somebody four answers.
-                            if (q.followUp && option === q.followUp.when && !groupCounts[q.id]) {
-                              setGroupCounts((c) => ({ ...c, [q.id]: 1 }));
+                            if (question.followUp && option === question.followUp.when && !groupCounts[question.id]) {
+                              setGroupCounts((c) => ({ ...c, [question.id]: 1 }));
                             }
                           }}
                           className={`flex-1 items-center rounded-xl border py-3 ${
-                            chosen ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                            picked ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
                           }`}
                         >
-                          <Text className={`text-sm font-semibold ${chosen ? "text-marine-700" : "text-ink-muted"}`}>
+                          <Text className={`text-sm font-semibold ${picked ? "text-marine-700" : "text-ink-muted"}`}>
                             {option}
                           </Text>
                         </Pressable>
@@ -361,26 +376,44 @@ export default function SignStep() {
                     })}
                   </View>
 
-                  {q.followUp && answers[q.id] === q.followUp.when ? (
+                  {question.followUp && answers[question.id] === question.followUp.when ? (
                     <View className="mt-4">
                       <FollowUpForm
-                        questionId={q.id}
-                        followUp={q.followUp}
+                        questionId={question.id}
+                        followUp={question.followUp}
                         answers={answers}
                         onChange={setAnswer}
-                        groupCount={groupCounts[q.id] ?? 1}
-                        onAddGroup={() => setGroupCounts((c) => ({ ...c, [q.id]: (c[q.id] ?? 1) + 1 }))}
-                        onRemoveGroup={(index) => removeGroup(q.id, index)}
+                        groupCount={groupCounts[question.id] ?? 1}
+                        onAddGroup={() => setGroupCounts((c) => ({ ...c, [question.id]: (c[question.id] ?? 1) + 1 }))}
+                        onRemoveGroup={(index) => removeGroup(question.id, index)}
                       />
                     </View>
                   ) : null}
                 </View>
-              ))}
+              );
+            }}
+          />
 
+          {/* The gate. Unchanged in what it demands -- the whole document has
+              to have been shown -- only in what it looks like: there is no
+              button to press once it opens, because pressing Continue to reach
+              a signature you have already earned is a step that does nothing. */}
+          {!reachedEnd ? (
+            <View className="mt-6 rounded-xl border border-line bg-white px-4 py-4">
+              <Text className="text-sm text-ink-muted">Scroll to the end of the document to continue.</Text>
+            </View>
+          ) : !readyToSign ? (
+            <View className="mt-6 rounded-xl border border-line bg-white px-4 py-4">
+              <Text className="text-sm text-ink-muted">
+                Answer the question above, and you can sign.
+              </Text>
+            </View>
+          ) : (
+            <>
               {doc.declaration ? (
                 <Pressable
                   onPress={() => setDeclared((d) => !d)}
-                  className="mb-5 flex-row gap-3 rounded-xl border border-line bg-white px-4 py-4"
+                  className="mb-5 mt-6 flex-row gap-3 rounded-xl border border-line bg-white px-4 py-4"
                 >
                   <View
                     className={`mt-0.5 h-5 w-5 items-center justify-center rounded border-2 ${
@@ -411,7 +444,6 @@ export default function SignStep() {
               </Text>
             </>
           )}
-
           {error ? (
             <View className="mt-4 rounded-lg border border-bad-line bg-bad-surface px-4 py-3">
               <Text className="text-sm text-bad-strong">{error}</Text>

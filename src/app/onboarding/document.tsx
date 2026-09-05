@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { formatDateAsTyped, isoToTypedDate, typedDateToISO } from "@/lib/dates";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { readDocumentPhoto, type Reading } from "@/lib/portal-api";
@@ -121,12 +122,14 @@ function Field({
   onChangeText,
   placeholder,
   autoCapitalize,
+  keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
   autoCapitalize?: "none" | "characters" | "words";
+  keyboardType?: "default" | "number-pad";
 }) {
   return (
     <View className="mb-4">
@@ -136,29 +139,13 @@ function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         autoCapitalize={autoCapitalize}
+        keyboardType={keyboardType}
         className="rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
       />
     </View>
   );
 }
 
-/** DD/MM/YYYY as people write it, stored as the date the database wants. */
-function toIsoDate(typed: string): string | null {
-  const match = typed.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (!match) return null;
-  const [, day, month, year] = match;
-  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  const parsed = new Date(`${iso}T00:00:00Z`);
-  // Round-tripped so 31/02 is refused rather than rolled forward into March.
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso) return null;
-  return iso;
-}
-
-function fromIsoDate(iso: string | null): string {
-  if (!iso) return "";
-  const [year, month, day] = iso.split("-");
-  return `${day}/${month}/${year}`;
-}
 
 export default function DocumentStep() {
   const router = useRouter();
@@ -239,7 +226,7 @@ export default function DocumentStep() {
       const read = result.value.reading;
       setReading(read);
       setNumber(read.document_number ?? "");
-      setExpiry(fromIsoDate(read.expires_on));
+      setExpiry(isoToTypedDate(read.expires_on));
       setReadingNote(
         read.legible && read.document_number
           ? "We read this from your photo. Check it against the document and correct anything wrong."
@@ -263,7 +250,7 @@ export default function DocumentStep() {
       return;
     }
 
-    const iso = expiry.trim() ? toIsoDate(expiry) : null;
+    const iso = expiry.trim() ? typedDateToISO(expiry) : null;
     if (expiry.trim() && !iso) {
       setError("The expiry date should be written as DD/MM/YYYY.");
       return;
@@ -397,7 +384,13 @@ export default function DocumentStep() {
                     placeholder="As printed on the document"
                   />
 
-                  <Field label="Expiry date" value={expiry} onChangeText={setExpiry} placeholder="DD/MM/YYYY" />
+                  <Field
+                    label="Expiry date"
+                    value={expiry}
+                    onChangeText={(v) => setExpiry(formatDateAsTyped(v))}
+                    placeholder="DD/MM/YYYY"
+                    keyboardType="number-pad"
+                  />
 
                   {kind === "drivers_licence" ? (
                     <>

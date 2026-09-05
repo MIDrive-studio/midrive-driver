@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { ZoomableImage } from "@/components/zoomable-image";
 
@@ -90,7 +91,21 @@ function Figure({ asset }: { asset: string }) {
   return <ZoomableImage uri={`${FIGURE_BASE}/${encodeURIComponent(asset)}`} caption={asset} />;
 }
 
-export function DocumentBlocks({ blocks }: { blocks: Block[] }) {
+export function DocumentBlocks({
+  blocks,
+  renderQuestion,
+}: {
+  blocks: Block[];
+  /**
+   * Draws a question where the document asks it.
+   *
+   * Without this a question is only previewed here and answered somewhere
+   * else, which put the same question to the driver twice -- once as a line
+   * they could not act on, then again on the next screen. A caller that can
+   * answer supplies this and the real control appears in place.
+   */
+  renderQuestion?: (block: Block, index: number) => ReactNode;
+}) {
   return (
     <View>
       {blocks.map((block, index) => {
@@ -121,9 +136,14 @@ export function DocumentBlocks({ blocks }: { blocks: Block[] }) {
             return <View key={index} className="h-4" />;
 
           case "question":
-            // Answered on the declaration screen, not here. Shown so the driver
-            // reads the question in the place the document asks it.
-            return (
+            // Answered here, in the place the document asks it. The fallback
+            // is for any caller that cannot take an answer -- it still shows
+            // the question rather than dropping it, because a question missing
+            // from something somebody signs is worse than one they cannot
+            // answer yet.
+            return renderQuestion ? (
+              <View key={index}>{renderQuestion(block, index)}</View>
+            ) : (
               <View key={index} className="mb-4 rounded-lg border border-line bg-surface-sunken px-3 py-3">
                 <Text className="text-[15px] font-semibold leading-6 text-ink">{block.prompt}</Text>
                 <Text className="mt-1 text-sm text-ink-subtle">You will be asked this before you sign.</Text>

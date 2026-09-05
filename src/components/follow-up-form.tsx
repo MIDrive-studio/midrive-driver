@@ -1,4 +1,5 @@
 import { Pressable, Text, TextInput, View } from "react-native";
+import { formatMonthAsTyped } from "@/lib/dates";
 import { Feather } from "@expo/vector-icons";
 
 // What a Yes actually means.
@@ -124,10 +125,15 @@ function Field({
       ) : field.kind === "multi" ? (
         <Multi options={field.options ?? []} value={value} onChange={onChange} />
       ) : (
+        // A month field asked for a month and then accepted anything, so
+        // "Month and year is enough" came back as a full date typed by hand.
+        // It now punctuates itself as MM/YYYY, which is what the field has
+        // always claimed to be.
         <TextInput
           value={value}
-          onChangeText={onChange}
-          placeholder={field.kind === "month" ? "e.g. March 2021" : undefined}
+          onChangeText={(v) => onChange(field.kind === "month" ? formatMonthAsTyped(v) : v)}
+          placeholder={field.kind === "month" ? "MM/YYYY" : undefined}
+          keyboardType={field.kind === "month" ? "number-pad" : "default"}
           className="rounded-lg border border-line-strong bg-white px-4 py-3 text-ink"
           multiline={field.kind === "text"}
         />

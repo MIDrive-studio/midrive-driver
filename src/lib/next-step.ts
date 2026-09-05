@@ -20,6 +20,8 @@ export const STEP_ROUTE: Record<string, string> = {
   right_to_work: "/onboarding/document?kind=right_to_work",
   company_documents: "/onboarding/documents",
   midrive_contract: "/onboarding/documents",
+  bank_details: "/onboarding/bank",
+  tax_details: "/onboarding/tax",
 };
 
 /**
