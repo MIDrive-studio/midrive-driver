@@ -112,19 +112,12 @@ export default function AddressesStep() {
   // late cannot overwrite a newer one.
   const lookedUp = useRef<string>("");
 
-  const [form, setForm] = useState({
-    address_line1: "",
-    address_line2: "",
-    city: "",
-    county: "",
-    postcode: "",
-    lived_from: "",
-    lived_to: "",
-    stillHere: false,
-  });
-
+  // The number or name is held apart from the street so it can be insisted on.
+  // Asked as one line, a street-only result from the map looked exactly like a
+  // complete address and saved as one.
   const EMPTY_FORM = {
-    address_line1: "",
+    building: "",
+    street: "",
     address_line2: "",
     city: "",
     county: "",
@@ -133,6 +126,8 @@ export default function AddressesStep() {
     lived_to: "",
     stillHere: false,
   };
+
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const load = useCallback(async () => {
     if (!driver) return;
@@ -221,7 +216,12 @@ export default function AddressesStep() {
     setSearch("");
     setForm((f) => ({
       ...f,
-      address_line1: address.line1,
+      // Whatever the record actually has. OpenStreetMap often has no house
+      // number, and this is deliberately left empty rather than filled with
+      // the street when it does not -- an empty box the driver must complete
+      // is the point.
+      building: address.buildingNumber ?? address.buildingName ?? "",
+      street: address.street ?? address.line1,
       address_line2: address.line2 ?? "",
       city: address.city ?? "",
       county: address.county ?? "",
@@ -261,8 +261,14 @@ export default function AddressesStep() {
     if (!driver) return;
     setError(null);
 
-    if (!form.address_line1.trim() || !form.lived_from) {
-      setError("The address and the month you moved in are both needed.");
+    // A street with no number is not somewhere anybody lives, and it is what a
+    // map search returns when it has nothing better. It used to save.
+    if (!form.building.trim()) {
+      setError("The house number or name is needed. If the search did not fill it in, type it yourself.");
+      return;
+    }
+    if (!form.street.trim() || !form.lived_from) {
+      setError("The street and the month you moved in are both needed.");
       return;
     }
     if (!form.stillHere && !form.lived_to) {
@@ -274,24 +280,13 @@ export default function AddressesStep() {
       return;
     }
 
-    // Whether what is in the form is still the record that was selected.
-    //
-    // The postcode is compared only when the record had one. Plenty of
-    // OpenStreetMap entries do not, and a driver typing in the missing
-    // postcode has completed the address rather than changed which house it
-    // is -- dropping the components for that would punish them for helping.
-    const stillMatches =
-      chosen !== null &&
-      chosen.line1 === form.address_line1.trim() &&
-      (chosen.line2 ?? "") === form.address_line2.trim() &&
-      (chosen.city ?? "") === form.city.trim() &&
-      (chosen.postcode === "" || chosen.postcode === form.postcode.trim());
+    const line1 = `${form.building.trim()} ${form.street.trim()}`.trim();
 
     setSaving(true);
     const { error: addError } = await supabase.from("driver_address_history").insert({
       driver_id: driver.id,
       company_id: driver.company_id,
-      address_line1: form.address_line1.trim(),
+      address_line1: line1,
       address_line2: form.address_line2.trim() || null,
       city: form.city.trim() || null,
       county: form.county.trim() || null,
@@ -301,9 +296,13 @@ export default function AddressesStep() {
       // field after picking has changed the address, so the components no
       // longer describe what is stored and are dropped rather than left to
       // contradict the lines above them.
-      building_number: stillMatches ? chosen!.buildingNumber : null,
-      building_name: stillMatches ? chosen!.buildingName : null,
-      street: stillMatches ? chosen!.street : null,
+      // What the driver actually entered, whether or not it came from the map.
+      // Anything with a digit in it is a number and the rest is a name -- the
+      // one distinction worth drawing, and it is drawn from what was typed
+      // rather than guessed at.
+      building_number: /d/.test(form.building.trim()) ? form.building.trim() : null,
+      building_name: /d/.test(form.building.trim()) ? null : form.building.trim(),
+      street: form.street.trim() || null,
 
       lived_from: form.lived_from,
       lived_to: form.stillHere ? null : form.lived_to,
@@ -457,7 +456,18 @@ export default function AddressesStep() {
 
               <View className="mb-4 mt-1 h-px bg-line" />
 
-              <Field label="Address" value={form.address_line1} onChangeText={(v) => setForm((f) => ({ ...f, address_line1: v }))} autoCapitalize="words" />
+              <Field
+                label="House number or name"
+                value={form.building}
+                onChangeText={(v) => setForm((f) => ({ ...f, building: v }))}
+                autoCapitalize="words"
+              />
+              <Field
+                label="Street"
+                value={form.street}
+                onChangeText={(v) => setForm((f) => ({ ...f, street: v }))}
+                autoCapitalize="words"
+              />
               <Field label="Address line 2 (optional)" value={form.address_line2} onChangeText={(v) => setForm((f) => ({ ...f, address_line2: v }))} autoCapitalize="words" />
               <Field label="Town or city" value={form.city} onChangeText={(v) => setForm((f) => ({ ...f, city: v }))} autoCapitalize="words" />
               <Field label="County (optional)" value={form.county} onChangeText={(v) => setForm((f) => ({ ...f, county: v }))} autoCapitalize="words" />
