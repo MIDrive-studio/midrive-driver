@@ -148,6 +148,53 @@ export default function AddressesStep() {
 
   const cover = addressCover(lines);
 
+  /** One search at a time, with the newest answer winning. */
+  const runSearch = useCallback(async (query: string, near: string | undefined) => {
+    // Marks this as the newest search. Anything older that lands after it is
+    // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
+    // not end with the first answer overwriting the second.
+    const mine = ++searchSeq.current;
+
+    setSearching(true);
+    const result = await searchAddresses(query, near);
+
+    if (mine !== searchSeq.current) return;
+
+    setSearching(false);
+
+    if (!result.ok) {
+      setSuggestions(null);
+      setSearchNote(
+        result.unavailable
+          ? "Address search is not available just now. Type the address in below."
+          : result.error
+      );
+      return;
+    }
+
+    const { addresses } = result.value;
+    setSuggestions(addresses);
+    // Said plainly. Open data does not have every house, and a driver whose
+    // address is missing needs to know to type it rather than keep trying.
+    setSearchNote(addresses.length === 0 ? "No match. Type the address in below." : null);
+  }, []);
+
+  // Roughly where to look, as a value rather than a function so the search
+  // below can depend on it.
+  //
+  // "67 Chiltern" on its own matches eight streets in eight counties and
+  // offers none of the right one. The postcode on the form is the best hint
+  // when it is there; the last address already entered is the next best,
+  // because people move locally more often than not. It only reorders the
+  // results -- an address at the other end of the country is still found.
+  //
+  // Watched, not merely read: a driver who searches, gets nothing useful, and
+  // then fills in their postcode should see the search run again rather than
+  // be left with the bad results until they edit the query.
+  const hint = isComplete(form.postcode)
+    ? form.postcode
+    : (lines.find((l) => l.postcode)?.postcode ?? undefined);
+
   /**
    * Searching, on a pause rather than a keystroke.
    *
@@ -170,58 +217,13 @@ export default function AddressesStep() {
     }
 
     const timer = setTimeout(() => {
-      runSearch(query);
+      runSearch(query, hint);
     }, 350);
 
     // Typing again before the timer fires cancels it, which is why holding a
     // key down does not queue a request per repeat.
     return () => clearTimeout(timer);
-  }, [search]);
-
-  /** The best postcode we hold for where this driver is likely to be. */
-  function hintPostcode(): string | undefined {
-    if (isComplete(form.postcode)) return form.postcode;
-    // lines is newest first, so this is the most recent address they gave.
-    return lines.find((l) => l.postcode)?.postcode ?? undefined;
-  }
-
-  async function runSearch(query: string) {
-    // Marks this as the newest search. Anything older that lands after it is
-    // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
-    // not end with the first answer overwriting the second.
-    const mine = ++searchSeq.current;
-
-    setSearching(true);
-    // Roughly where to look.
-    //
-    // "67 Chiltern" on its own matches eight streets in eight counties and
-    // offers the driver none of the right one. The postcode on the form is the
-    // best hint when it is there; the last address they entered is the next
-    // best, because people move locally more often than not. It only ever
-    // reorders the results -- an address at the other end of the country is
-    // still found.
-    const result = await searchAddresses(query, hintPostcode());
-
-    if (mine !== searchSeq.current) return;
-
-    setSearching(false);
-
-    if (!result.ok) {
-      setSuggestions(null);
-      setSearchNote(
-        result.unavailable
-          ? "Address search is not available just now. Type the address in below."
-          : result.error
-      );
-      return;
-    }
-
-    const { addresses } = result.value;
-    setSuggestions(addresses);
-    // Said plainly. Open data does not have every house, and a driver whose
-    // address is missing needs to know to type it rather than keep trying.
-    setSearchNote(addresses.length === 0 ? "No match. Type the address in below." : null);
-  }
+  }, [search, hint, runSearch]);
 
   /** Everything the record held, onto the form, in one go. */
   function pick(address: PickableAddress) {

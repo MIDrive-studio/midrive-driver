@@ -14,6 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { formatDateAsTyped, isoToTypedDate, typedDateToISO } from "@/lib/dates";
 import { takeCapturedDocument } from "@/lib/captured-document";
+import { BASES, documentsFor, labelFor, shareCodeRequired, usesNationalInsurance, type Basis } from "@/lib/right-to-work";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { readDocumentPhoto, type Reading } from "@/lib/portal-api";
@@ -32,7 +33,10 @@ import type { OnboardingState } from "@/types/onboarding";
 // portal cannot be reached the step still works with an empty box and a
 // keyboard.
 
-type Step = "capture" | "confirm" | "filed";
+// "basis" is only ever reached for a right to work. A licence is a licence,
+// and asking a driver which kind of licence they are sending would be a
+// question with one answer.
+type Step = "basis" | "capture" | "confirm" | "filed";
 
 const COPY: Record<
   UploadKind,
@@ -156,7 +160,10 @@ export default function DocumentStep() {
   const copy = COPY[kind];
   const needsBack = kind === "drivers_licence";
 
-  const [step, setStep] = useState<Step>("capture");
+  const [step, setStep] = useState<Step>(kind === "right_to_work" ? "basis" : "capture");
+  const [basis, setBasis] = useState<Basis | null>(null);
+  const [documentKind, setDocumentKind] = useState<string | null>(null);
+  const [shareCode, setShareCode] = useState("");
   const [filed, setFiled] = useState<Filed | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -188,7 +195,8 @@ export default function DocumentStep() {
     const newest = (data?.[0] as Filed) ?? null;
     setFiled(newest);
     // A rejected document is not a finished step: it reopens at the camera.
-    setStep(newest && newest.review_status !== "rejected" ? "filed" : "capture");
+    const restart = kind === "right_to_work" ? "basis" : "capture";
+    setStep(newest && newest.review_status !== "rejected" ? "filed" : restart);
     setLoading(false);
   }, [driver, kind]);
 
@@ -279,6 +287,14 @@ export default function DocumentStep() {
       return;
     }
 
+    // Refused here rather than by the office three days later. Without a share
+    // code the office cannot complete the check at all, so a submission
+    // missing one is a wasted round trip for everybody.
+    if (basis && shareCodeRequired(basis) && !shareCode.trim()) {
+      setError("Your share code is needed. Get one from gov.uk -- \"Prove your right to work to an employer\".");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -294,6 +310,9 @@ export default function DocumentStep() {
         documentNumber: number.trim().toUpperCase(),
         expiresOn: iso,
         checkCode: kind === "drivers_licence" ? checkCode.trim().toUpperCase() || null : null,
+        nationalityBasis: basis,
+        documentKind: documentKind,
+        shareCode: shareCode.trim().toUpperCase() || null,
         extracted: reading ?? null,
       },
     });
@@ -321,7 +340,11 @@ export default function DocumentStep() {
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 px-4 py-3">
         <Pressable
-          onPress={() => (step === "confirm" ? setStep("capture") : router.back())}
+          onPress={() => {
+            if (step === "confirm") return setStep("capture");
+            if (step === "capture" && kind === "right_to_work") return setStep("basis");
+            return router.back();
+          }}
           hitSlop={12}
           className="p-1"
         >
@@ -354,11 +377,94 @@ export default function DocumentStep() {
                 </View>
               ) : null}
 
+              {step === "basis" ? (
+                <>
+                  <Text className="mb-1 text-base font-semibold text-ink">What is your right to work based on?</Text>
+                  <Text className="mb-4 text-sm text-ink-muted">
+                    This decides which documents we can accept, so it is asked first.
+                  </Text>
+
+                  {BASES.map((option) => {
+                    const picked = basis === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          setBasis(option.value);
+                          // The kinds differ per route, so a kind chosen under
+                          // the old answer is not a kind under the new one.
+                          setDocumentKind(null);
+                          setError(null);
+                        }}
+                        className={`mb-2 rounded-xl border px-4 py-3.5 ${
+                          picked ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                        }`}
+                      >
+                        <Text className={`text-[15px] font-semibold ${picked ? "text-marine-700" : "text-ink"}`}>
+                          {option.label}
+                        </Text>
+                        <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
+                      </Pressable>
+                    );
+                  })}
+
+                  {basis ? (
+                    <>
+                      <Text className="mb-1 mt-5 text-base font-semibold text-ink">What are you sending us?</Text>
+                      <Text className="mb-4 text-sm text-ink-muted">Pick the document you have to hand.</Text>
+
+                      {documentsFor(basis).map((option) => {
+                        const picked = documentKind === option.kind;
+                        return (
+                          <Pressable
+                            key={option.kind}
+                            onPress={() => {
+                              setDocumentKind(option.kind);
+                              setError(null);
+                            }}
+                            className={`mb-2 rounded-xl border px-4 py-3.5 ${
+                              picked ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                            }`}
+                          >
+                            <Text className={`text-[15px] font-semibold ${picked ? "text-marine-700" : "text-ink"}`}>
+                              {option.label}
+                            </Text>
+                            <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
+                          </Pressable>
+                        );
+                      })}
+
+                      {/* Already given on the personal details step, so it is
+                          pointed at rather than asked for again. */}
+                      {documentKind && usesNationalInsurance(basis, documentKind) ? (
+                        <View className="mb-2 mt-1 rounded-xl border border-marine-200 bg-marine-50 px-4 py-3">
+                          <Text className="text-sm text-marine-800">
+                            We will use the National Insurance number you already gave us alongside this.
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  <Pressable
+                    onPress={() => setStep("capture")}
+                    disabled={!basis || !documentKind}
+                    className="mt-3 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700 disabled:opacity-40"
+                  >
+                    <Text className="text-base font-semibold text-white">Next</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
               {step === "capture" ? (
                 <>
                   <Shot
-                    label={copy.frontLabel}
-                    hint={copy.frontHint}
+                    label={basis && documentKind ? labelFor(basis, documentKind) : copy.frontLabel}
+                    hint={
+                      basis && documentKind
+                        ? (documentsFor(basis).find((d) => d.kind === documentKind)?.hint ?? copy.frontHint)
+                        : copy.frontHint
+                    }
                     photo={front}
                     onPick={(fromCamera) => choose("front", fromCamera)}
                     disabled={busy}
@@ -427,6 +533,26 @@ export default function DocumentStep() {
                       <Text className="-mt-2 mb-4 text-xs text-ink-subtle">
                         Get this from gov.uk &mdash; &ldquo;View or share your driving licence information&rdquo;. It
                         lets the office check your licence with the DVLA without you sending anything else.
+                      </Text>
+                    </>
+                  ) : null}
+
+                  {/* Every route but the British one. A British or Irish
+                      passport proves an unlimited right to work by itself;
+                      the online check exists for status held digitally. */}
+                  {basis && shareCodeRequired(basis) ? (
+                    <>
+                      <Field
+                        label="Home Office share code"
+                        value={shareCode}
+                        onChangeText={setShareCode}
+                        autoCapitalize="characters"
+                        placeholder="W12 3AB 456"
+                      />
+                      <Text className="-mt-2 mb-4 text-xs text-ink-subtle">
+                        Get this from gov.uk &mdash; &ldquo;Prove your right to work to an employer&rdquo;. It lets the
+                        office confirm your status with the Home Office. Codes expire after 90 days, so send it soon
+                        after you generate it.
                       </Text>
                     </>
                   ) : null}

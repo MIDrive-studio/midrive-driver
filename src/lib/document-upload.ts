@@ -95,6 +95,12 @@ export type Confirmed = {
   expiresOn: string | null;
   /** DVLA check code, licence only. */
   checkCode?: string | null;
+  /** Which right-to-work route this is: british, eu or other. */
+  nationalityBasis?: string | null;
+  /** What the document actually is, within its type -- a passport, a visa. */
+  documentKind?: string | null;
+  /** Home Office share code. Required on every route but the British one. */
+  shareCode?: string | null;
   /** What the machine read, kept beside what the person confirmed. */
   extracted?: unknown;
 };
@@ -152,6 +158,9 @@ export async function sendDocument({
     document_number: confirmed.documentNumber,
     expires_on: confirmed.expiresOn,
     check_code: confirmed.checkCode ?? null,
+    nationality_basis: confirmed.nationalityBasis ?? null,
+    document_kind: confirmed.documentKind ?? null,
+    share_code: confirmed.shareCode ?? null,
     extracted: confirmed.extracted ?? null,
     created_by: userId ?? null,
   });
