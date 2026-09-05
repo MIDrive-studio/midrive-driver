@@ -14,7 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { formatDateAsTyped, isoToTypedDate, typedDateToISO } from "@/lib/dates";
 import { takeCapturedDocument } from "@/lib/captured-document";
-import { BASES, documentsFor, labelFor, shareCodeRequired, usesNationalInsurance, type Basis } from "@/lib/right-to-work";
+import { BASES, documentsFor, labelFor, shapeFor, shareCodeRequired, usesNationalInsurance, type Basis } from "@/lib/right-to-work";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { readDocumentPhoto, type Reading } from "@/lib/portal-api";
@@ -36,7 +36,10 @@ import type { OnboardingState } from "@/types/onboarding";
 // "basis" is only ever reached for a right to work. A licence is a licence,
 // and asking a driver which kind of licence they are sending would be a
 // question with one answer.
-type Step = "basis" | "capture" | "confirm" | "filed";
+// One question to a screen. Two on one screen means the driver reads the
+// second while still deciding the first, and an answer already given sits
+// there taking up room. Answering moves them on; Back brings the answer back.
+type Step = "basis" | "document" | "capture" | "confirm" | "filed";
 
 const COPY: Record<
   UploadKind,
@@ -224,7 +227,10 @@ export default function DocumentStep() {
     // fails. Choosing from the library still uses the picker: there is nothing
     // to guide once the photograph has been taken.
     if (fromCamera) {
-      router.push(`/onboarding/capture-document?kind=${kind}&side=${which}` as never);
+      // A licence is always a card; a right-to-work document is whatever the
+      // driver just said it was.
+      const shape = kind === "drivers_licence" ? "card" : shapeFor(documentKind);
+      router.push(`/onboarding/capture-document?kind=${kind}&side=${which}&shape=${shape}` as never);
       return;
     }
 
@@ -342,7 +348,8 @@ export default function DocumentStep() {
         <Pressable
           onPress={() => {
             if (step === "confirm") return setStep("capture");
-            if (step === "capture" && kind === "right_to_work") return setStep("basis");
+            if (step === "capture" && kind === "right_to_work") return setStep("document");
+            if (step === "document") return setStep("basis");
             return router.back();
           }}
           hitSlop={12}
@@ -384,80 +391,76 @@ export default function DocumentStep() {
                     This decides which documents we can accept, so it is asked first.
                   </Text>
 
-                  {BASES.map((option) => {
-                    const picked = basis === option.value;
-                    return (
-                      <Pressable
-                        key={option.value}
-                        onPress={() => {
-                          setBasis(option.value);
-                          // The kinds differ per route, so a kind chosen under
-                          // the old answer is not a kind under the new one.
-                          setDocumentKind(null);
-                          setError(null);
-                        }}
-                        className={`mb-2 rounded-xl border px-4 py-3.5 ${
-                          picked ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                  {BASES.map((option) => (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => {
+                        // Changing the answer clears what followed from it:
+                        // the documents differ per route, so a kind chosen
+                        // under the old answer is not a kind under the new one.
+                        if (option.value !== basis) setDocumentKind(null);
+                        setBasis(option.value);
+                        setError(null);
+                        setStep("document");
+                      }}
+                      className={`mb-2 rounded-xl border px-4 py-3.5 ${
+                        basis === option.value ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                      }`}
+                    >
+                      <Text
+                        className={`text-[15px] font-semibold ${
+                          basis === option.value ? "text-marine-700" : "text-ink"
                         }`}
                       >
-                        <Text className={`text-[15px] font-semibold ${picked ? "text-marine-700" : "text-ink"}`}>
-                          {option.label}
-                        </Text>
-                        <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
-                      </Pressable>
-                    );
-                  })}
-
-                  {basis ? (
-                    <>
-                      <Text className="mb-1 mt-5 text-base font-semibold text-ink">What are you sending us?</Text>
-                      <Text className="mb-4 text-sm text-ink-muted">Pick the document you have to hand.</Text>
-
-                      {documentsFor(basis).map((option) => {
-                        const picked = documentKind === option.kind;
-                        return (
-                          <Pressable
-                            key={option.kind}
-                            onPress={() => {
-                              setDocumentKind(option.kind);
-                              setError(null);
-                            }}
-                            className={`mb-2 rounded-xl border px-4 py-3.5 ${
-                              picked ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
-                            }`}
-                          >
-                            <Text className={`text-[15px] font-semibold ${picked ? "text-marine-700" : "text-ink"}`}>
-                              {option.label}
-                            </Text>
-                            <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
-                          </Pressable>
-                        );
-                      })}
-
-                      {/* Already given on the personal details step, so it is
-                          pointed at rather than asked for again. */}
-                      {documentKind && usesNationalInsurance(basis, documentKind) ? (
-                        <View className="mb-2 mt-1 rounded-xl border border-marine-200 bg-marine-50 px-4 py-3">
-                          <Text className="text-sm text-marine-800">
-                            We will use the National Insurance number you already gave us alongside this.
-                          </Text>
-                        </View>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <Pressable
-                    onPress={() => setStep("capture")}
-                    disabled={!basis || !documentKind}
-                    className="mt-3 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700 disabled:opacity-40"
-                  >
-                    <Text className="text-base font-semibold text-white">Next</Text>
-                  </Pressable>
+                        {option.label}
+                      </Text>
+                      <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
+                    </Pressable>
+                  ))}
                 </>
               ) : null}
 
+              {step === "document" && basis ? (
+                <>
+                  <Text className="mb-1 text-base font-semibold text-ink">What are you sending us?</Text>
+                  <Text className="mb-4 text-sm text-ink-muted">Pick the document you have to hand.</Text>
+
+                  {documentsFor(basis).map((option) => (
+                    <Pressable
+                      key={option.kind}
+                      onPress={() => {
+                        setDocumentKind(option.kind);
+                        setError(null);
+                        setStep("capture");
+                      }}
+                      className={`mb-2 rounded-xl border px-4 py-3.5 ${
+                        documentKind === option.kind ? "border-marine-600 bg-marine-50" : "border-line-strong bg-white"
+                      }`}
+                    >
+                      <Text
+                        className={`text-[15px] font-semibold ${
+                          documentKind === option.kind ? "text-marine-700" : "text-ink"
+                        }`}
+                      >
+                        {option.label}
+                      </Text>
+                      <Text className="mt-0.5 text-sm text-ink-subtle">{option.hint}</Text>
+                    </Pressable>
+                  ))}
+                </>
+              ) : null}
               {step === "capture" ? (
                 <>
+                  {/* Already given on the personal details step, so it is
+                      pointed at rather than asked for again. */}
+                  {basis && documentKind && usesNationalInsurance(basis, documentKind) ? (
+                    <View className="mb-4 rounded-xl border border-marine-200 bg-marine-50 px-4 py-3">
+                      <Text className="text-sm text-marine-800">
+                        We will use the National Insurance number you already gave us alongside this.
+                      </Text>
+                    </View>
+                  ) : null}
+
                   <Shot
                     label={basis && documentKind ? labelFor(basis, documentKind) : copy.frontLabel}
                     hint={

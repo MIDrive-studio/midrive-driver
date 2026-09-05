@@ -121,3 +121,44 @@ export function shareCodeRequired(basis: Basis): boolean {
 export function usesNationalInsurance(basis: Basis, kind: string): boolean {
   return basis === "british" && kind === "birth_certificate";
 }
+
+/**
+ * The shape of the thing being photographed.
+ *
+ * A guide box only helps if it is the shape of what the driver is holding. A
+ * card-shaped box round an A4 birth certificate tells them to do the wrong
+ * thing, and they will do it -- the box is the instruction.
+ *
+ * Real dimensions rather than approximations:
+ *
+ *   card      ID-1, 85.6 x 54mm    -- driving licence, national identity card,
+ *                                     biometric residence permit or card
+ *   passport  ID-3, 125 x 88mm     -- the photo page of a passport booklet,
+ *                                     open and flat
+ *   document  A4, 210 x 297mm      -- a birth certificate or a certificate of
+ *                                     naturalisation, which are portrait
+ */
+export type DocumentShape = "card" | "passport" | "document";
+
+export const SHAPE_RATIO: Record<DocumentShape, number> = {
+  card: 85.6 / 54,
+  passport: 125 / 88,
+  document: 210 / 297,
+};
+
+const SHAPES: Record<string, DocumentShape> = {
+  photocard_licence: "card",
+  national_identity_card: "card",
+  residence_permit: "card",
+  passport: "passport",
+  // Usually a sticker or stamp inside a passport, so the passport is what the
+  // driver is actually holding open in front of them.
+  visa: "passport",
+  birth_certificate: "document",
+  certificate_of_naturalisation: "document",
+};
+
+/** The shape to draw for a document kind. A card, when nothing else is known. */
+export function shapeFor(kind: string | null | undefined): DocumentShape {
+  return (kind && SHAPES[kind]) || "card";
+}
