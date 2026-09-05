@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -89,7 +90,7 @@ export default function CaptureDocumentScreen() {
   function keep() {
     if (!pending) return;
     leaveCapturedDocument(side, pending);
-    router.back();
+    leaveStep(router);
   }
 
   // --- Permission -----------------------------------------------------------
@@ -113,7 +114,7 @@ export default function CaptureDocumentScreen() {
         <Pressable onPress={requestPermission} className="rounded-xl bg-white px-6 py-3">
           <Text className="text-sm font-semibold text-slate-900">Allow camera</Text>
         </Pressable>
-        <Pressable onPress={() => router.back()} className="mt-3 px-6 py-3">
+        <Pressable onPress={() => leaveStep(router)} className="mt-3 px-6 py-3">
           <Text className="text-sm font-semibold text-white/70">Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -164,7 +165,7 @@ export default function CaptureDocumentScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => leaveStep(router)}
             accessibilityRole="button"
             accessibilityLabel="Close the camera"
             hitSlop={10}

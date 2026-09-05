@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -354,7 +355,7 @@ export default function AddressesStep() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 px-4 py-3">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-1">
+        <Pressable onPress={() => leaveStep(router)} hitSlop={12} className="p-1">
           <Feather name="chevron-left" size={24} color="#1f5089" />
         </Pressable>
         <Text className="text-lg font-bold text-ink">Where you have lived</Text>
@@ -543,7 +544,7 @@ export default function AddressesStep() {
 
           {cover.covered ? (
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => leaveStep(router)}
               className="mt-5 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700"
             >
               <Text className="text-base font-semibold text-white">Done</Text>

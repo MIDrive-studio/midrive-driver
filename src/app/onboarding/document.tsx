@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import {
   ActivityIndicator,
   Image,
@@ -350,7 +351,7 @@ export default function DocumentStep() {
             if (step === "confirm") return setStep("capture");
             if (step === "capture" && kind === "right_to_work") return setStep("document");
             if (step === "document") return setStep("basis");
-            return router.back();
+            return leaveStep(router);
           }}
           hitSlop={12}
           className="p-1"

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -51,7 +52,7 @@ export default function DocumentsStep() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 px-4 py-3">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-1">
+        <Pressable onPress={() => leaveStep(router)} hitSlop={12} className="p-1">
           <Feather name="chevron-left" size={24} color="#1f5089" />
         </Pressable>
         <Text className="text-lg font-bold text-ink">Company documents</Text>
