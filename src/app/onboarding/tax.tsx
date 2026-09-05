@@ -11,9 +11,14 @@ import { supabase } from "@/lib/supabase";
 //
 // The rule this fills in is deliberate and worth stating, because it looks like
 // a missing validation until you know why: a UTR number is NOT required. HMRC
-// can take months to issue one, and requiring it before a driver may work would
-// hold up every new starter for a quarter. So the question is required and the
-// number is not -- a driver who says they are applying has answered.
+// can take months to issue one, and payroll can pay a driver without it. So the
+// question is required and the number is not -- a driver who says they are
+// applying has answered.
+//
+// What the screen owes them in exchange is the truth: apply now, you will be
+// paid meanwhile, come back when it arrives. An earlier version said payroll
+// could not pay without it, which was wrong and the kind of wrong that makes
+// somebody chase HMRC in a panic.
 //
 // VAT is the other half: most drivers are not registered, and the number is
 // only needed from the ones who are.
@@ -93,7 +98,8 @@ export default function TaxStep() {
       <KeyboardAvoidingView className="flex-1" behavior="padding">
         <ScrollView contentContainerClassName="px-5 pb-24" keyboardShouldPersistTaps="handled">
           <Text className="mb-5 text-sm text-ink-muted">
-            You work self-employed, so HMRC needs a Unique Taxpayer Reference for you. You do not need it to start.
+            You work self-employed, so HMRC needs a Unique Taxpayer Reference for you. You do not need it to start,
+            and you can be paid without it &mdash; but apply as soon as you can.
           </Text>
 
           {error ? (
@@ -143,8 +149,8 @@ export default function TaxStep() {
           ) : status === "applying" ? (
             <View className="mb-4 rounded-lg border border-line bg-surface-sunken px-4 py-3">
               <Text className="text-sm text-ink-muted">
-                That is fine &mdash; you can start work without it. Add it here as soon as HMRC sends it, because payroll
-                needs it before it can pay you as self-employed.
+                That is fine &mdash; you can start work and be paid without it. Apply to HMRC as soon as you can, and
+                come back and add it here the moment they send it.
               </Text>
             </View>
           ) : null}

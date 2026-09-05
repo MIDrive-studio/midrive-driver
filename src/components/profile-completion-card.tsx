@@ -19,8 +19,8 @@ export function ProfileCompletionCard({ driver }: { driver: Driver }) {
           <View className="flex-1">
             <Text className="text-sm font-semibold text-slate-900">One thing left, when you have it</Text>
             <Text className="mt-0.5 text-xs text-slate-500">
-              Add your {missingLater.join(" and ")} once HMRC sends it. Payroll needs it before it can
-              pay you as self-employed.
+              Apply to HMRC for your {missingLater.join(" and ")} as soon as you can, and add it here once it
+              arrives. You can be paid in the meantime.
             </Text>
             <Pressable
               onPress={() => router.push("/complete-profile")}
