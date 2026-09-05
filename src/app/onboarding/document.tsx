@@ -10,9 +10,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { formatDateAsTyped, isoToTypedDate, typedDateToISO } from "@/lib/dates";
+import { takeCapturedDocument } from "@/lib/captured-document";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { readDocumentPhoto, type Reading } from "@/lib/portal-api";
@@ -195,8 +196,30 @@ export default function DocumentStep() {
     load();
   }, [load]);
 
+  // The camera leaves its photograph behind and navigates back; this collects
+  // it. Taken rather than read, so returning to this screen for any other
+  // reason cannot re-apply a photograph that has already been used.
+  useFocusEffect(
+    useCallback(() => {
+      const captured = takeCapturedDocument();
+      if (!captured) return;
+      if (captured.side === "front") setFront(captured.photo);
+      else setBack(captured.photo);
+    }, [])
+  );
+
   async function choose(which: "front" | "back", fromCamera: boolean) {
     setError(null);
+
+    // Our own camera, because the phone's cannot be given a guide box and a
+    // licence photographed from across the desk is the main reason the reader
+    // fails. Choosing from the library still uses the picker: there is nothing
+    // to guide once the photograph has been taken.
+    if (fromCamera) {
+      router.push(`/onboarding/capture-document?kind=${kind}&side=${which}` as never);
+      return;
+    }
+
     const { photo, error: pickError } = await pickPhoto(fromCamera);
     if (pickError) {
       setError(pickError);
