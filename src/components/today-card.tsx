@@ -48,6 +48,7 @@ function Detail({ icon, label, value, muted }: { icon: keyof typeof Feather.glyp
 
 export function TodayCard({ driverId }: { driverId: string }) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [loading, setLoading] = useState(true);
   const { site } = useWorkingSite(driverId);
 
@@ -55,7 +56,7 @@ export function TodayCard({ driverId }: { driverId: string }) {
     let cancelled = false;
 
     async function load() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("rota_assignments")
         .select("route, shift, notes, vehicle:vehicles(registration)")
         .eq("driver_id", driverId)
@@ -63,6 +64,13 @@ export function TodayCard({ driverId }: { driverId: string }) {
         .maybeSingle();
 
       if (cancelled) return;
+
+      // "No route today" and "the route could not be read" look identical on
+      // this card and mean opposite things to a driver deciding whether to
+      // turn up. Row Level Security returns no rows rather than an error, so
+      // this only catches a genuine failure -- but a driver told there is
+      // nothing on the rota when the read simply failed will stay at home.
+      setUnreadable(Boolean(error));
 
       // PostgREST embeds a to-one relation as an object; the generated types
       // describe every embed as an array. Normalised so the card does not care.
@@ -85,6 +93,19 @@ export function TodayCard({ driverId }: { driverId: string }) {
     return (
       <View className="mb-4 items-center rounded-xl border border-line bg-surface p-6">
         <ActivityIndicator color="#1f5089" />
+      </View>
+    );
+  }
+
+  if (unreadable) {
+    return (
+      <View className="mb-4 rounded-xl border border-warn-line bg-warn-surface p-5">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-warn-strong">Today</Text>
+        <Text className="mt-1.5 text-lg font-bold text-ink">Couldn&apos;t load your route</Text>
+        <Text className="mt-1 text-sm text-ink-muted">
+          This is a problem reading it, not an empty rota. Pull down to try again, and check with your site manager
+          before assuming you are not working.
+        </Text>
       </View>
     );
   }
