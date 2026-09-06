@@ -288,7 +288,7 @@ export async function recentChecks(limit = 30): Promise<CompletedCheck[]> {
   return (data ?? []) as CompletedCheck[];
 }
 
-/** Whether a check has been handed over, as opposed to abandoned part-way. */
-export function isSubmitted(check: { status: string }): boolean {
-  return ["submitted", "processing", "analysed", "requires_review", "approved"].includes(check.status);
-}
+// The three status predicates live in inspection-status.ts, which imports
+// nothing native and so can be tested without a phone. Re-exported here so
+// that every caller keeps importing them from the module it already uses.
+export { wasHandedOver, wasRejected, isSubmitted } from "@/lib/inspection-status";

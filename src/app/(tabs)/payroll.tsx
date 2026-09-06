@@ -79,7 +79,14 @@ export default function PayrollScreen() {
   const start = startOfWeek(todayISODate());
   const weekLabel = weekRangeLabel(start, addDays(start, 6));
 
-  const grossPay = currentWeek ? currentWeek.base_pay + currentWeek.stops_bonus + currentWeek.additional_amount : 0;
+  // Deliberately not called gross. The gross_pay column in the office is base
+  // plus stops and nothing else; this is base plus stops plus additions, which
+  // is one deduction away from its net_pay. Borrowing the word would invite a
+  // later edit to read gross_pay instead, which is a different number.
+  // scripts/payroll-adds-up.mts in the portal holds the two definitions together.
+  const earningsBeforeDeductions = currentWeek
+    ? currentWeek.base_pay + currentWeek.stops_bonus + currentWeek.additional_amount
+    : 0;
   const deductions = currentWeek?.deductions_amount ?? 0;
 
   return (
@@ -121,7 +128,7 @@ export default function PayrollScreen() {
             </View>
             <View className="flex-row items-center justify-between border-t border-slate-200 bg-slate-900 px-5 py-4">
               <Text className="text-sm text-slate-400">Provisional Total</Text>
-              <Text className="text-2xl font-bold text-amber-400">£{Math.max(0, grossPay - deductions).toFixed(2)}</Text>
+              <Text className="text-2xl font-bold text-amber-400">£{Math.max(0, earningsBeforeDeductions - deductions).toFixed(2)}</Text>
             </View>
           </View>
         )}

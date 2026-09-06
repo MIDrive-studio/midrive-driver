@@ -9,6 +9,7 @@ import {
   assignedVehicleId,
   checksForDate,
   isSubmitted,
+  wasRejected,
   lookupVehicle,
   recentChecks,
   startInspection,
@@ -62,6 +63,7 @@ export default function VehicleCheckStart() {
   const [context, setContext] = useState<VehicleCheckContext | null>(null);
   const [rosteredId, setRosteredId] = useState<string | null>(null);
   const [todaysChecks, setTodaysChecks] = useState<CompletedCheck[]>([]);
+  const [rejectedToday, setRejectedToday] = useState<CompletedCheck[]>([]);
   const [earlier, setEarlier] = useState<CompletedCheck[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mileage, setMileage] = useState("");
@@ -83,6 +85,7 @@ export default function VehicleCheckStart() {
       ]);
 
       setTodaysChecks(checks.filter(isSubmitted));
+      setRejectedToday(checks.filter(wasRejected));
       // Previous days only. Today's are already above, in full.
       setEarlier(history.filter((check) => check.date !== today && isSubmitted(check)));
       setRosteredId(vehicleId);
@@ -177,6 +180,38 @@ export default function VehicleCheckStart() {
         {error && (
           <View className="mb-4 rounded-xl border border-bad-line bg-bad-surface px-4 py-3">
             <Text className="text-sm text-bad-strong">{error}</Text>
+          </View>
+        )}
+
+        {/* Sent back, before anything else: it is the one thing on this screen
+            the driver has to act on. It appeared nowhere at all until now --
+            both lists below filter on isSubmitted, which excludes a rejected
+            check -- so the office would send one back and the driver would
+            simply never be told. */}
+        {rejectedToday.length > 0 && (
+          <View className="mb-4 overflow-hidden rounded-xl border border-warn-line bg-surface">
+            <View className="flex-row items-center gap-2 border-b border-warn-line bg-warn-surface px-4 py-2.5">
+              <Feather name="alert-triangle" size={16} color="#b45309" />
+              <Text className="text-sm font-bold text-warn-strong">
+                {rejectedToday.length === 1
+                  ? "Sent back -- needs doing again"
+                  : `${rejectedToday.length} sent back -- need doing again`}
+              </Text>
+            </View>
+
+            {rejectedToday.map((check) => (
+              <View key={check.id} className="flex-row items-center gap-3 border-b border-line px-4 py-3 last:border-b-0">
+                <Feather name="truck" size={15} color="#64748b" />
+                <View className="flex-1">
+                  <Text className="text-base font-semibold text-ink">{check.van_registration}</Text>
+                  <Text className="text-xs text-ink-subtle">
+                    Submitted {check.submitted_at ? formatTime(check.submitted_at) : "earlier"}
+                    {" · "}
+                    The office needs this one doing again
+                  </Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
 

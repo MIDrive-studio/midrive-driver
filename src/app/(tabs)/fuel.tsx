@@ -115,7 +115,7 @@ export default function FuelScreen() {
     if (!driver) return;
 
     (async () => {
-      const { data } = await supabase
+      const { data, error: allocationError } = await supabase
         .from("fuel_card_allocations")
         .select("id, fuel_card_id, expires_at")
         .eq("driver_id", driver.id)
@@ -125,24 +125,33 @@ export default function FuelScreen() {
         .limit(1)
         .maybeSingle();
 
+      // Silence here would show a driver no card when they hold one, and
+      // they would try to draw a second rather than find out at the pump.
+      if (allocationError) {
+        setError(`Couldn't check whether you already have a card -- ${allocationError.message}`);
+        return;
+      }
       if (!data) return;
 
-      const { data: cardRow } = await supabase
+      const { data: cardRow, error: cardError } = await supabase
         .from("fuel_cards")
         .select("id, card_name, provider, card_number, last_four, pin, expiry_date")
         .eq("id", data.fuel_card_id)
         .maybeSingle();
 
-      if (cardRow) {
-        setAllocation({
-          allocationId: data.id,
-          fuelCardId: data.fuel_card_id,
-          expiresAt: data.expires_at,
-          reused: true,
-        });
-        setCard(cardRow as AllocatedCard);
-        setStep("reveal");
+      if (cardError || !cardRow) {
+        setError("You have a card allocated but its details couldn't be read. Tell your manager.");
+        return;
       }
+
+      setAllocation({
+        allocationId: data.id,
+        fuelCardId: data.fuel_card_id,
+        expiresAt: data.expires_at,
+        reused: true,
+      });
+      setCard(cardRow as AllocatedCard);
+      setStep("reveal");
     })();
   }, [driver]);
 

@@ -188,13 +188,23 @@ export default function DocumentStep() {
     // The newest of this type is the one that counts, which is the rule
     // driver_onboarding_state() applies -- so a resubmission after a rejection
     // supersedes it here for the same reason it does there.
-    const { data } = await supabase
+    const { data, error: loadError } = await supabase
       .from("driver_documents")
       .select("id, review_status, review_note")
       .eq("driver_id", driver.id)
       .eq("doc_type", kind)
       .order("created_at", { ascending: false })
       .limit(1);
+
+    // A failed read here is indistinguishable from having sent nothing, and
+    // the consequence is not a blank screen: the driver is put back at the
+    // camera and photographs a licence they have already sent, so the office
+    // receives it twice and has to work out which one is current.
+    if (loadError) {
+      setError(`Couldn't check what you have already sent -- ${loadError.message}`);
+      setLoading(false);
+      return;
+    }
 
     const newest = (data?.[0] as Filed) ?? null;
     setFiled(newest);

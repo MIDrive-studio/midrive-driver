@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { functionErrorMessage } from "@/lib/function-error";
 import { supabase } from "@/lib/supabase";
 import { dateWindow, formatDayLabel } from "@/lib/dates";
 import type { AvailabilityStatusResponse, AvailabilitySubmitResponse, AvailabilitySubmission, SubmissionInput } from "@/types/availability";
@@ -74,7 +75,10 @@ export default function AvailabilityScreen() {
     setSubmitting(false);
 
     if (invokeError) {
-      setError(invokeError.message);
+      // What the function actually said -- it turns down a date with a reason
+      // ("capacity filled", "that request has closed") and the driver needs
+      // that reason, not the client library's sentence about status codes.
+      setError(await functionErrorMessage(invokeError, "Your availability could not be sent. Try again."));
       return;
     }
 
