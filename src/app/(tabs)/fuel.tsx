@@ -28,6 +28,10 @@ import type { AllocatedCard, Allocation, FuelStationWithDistance, FuelStep, Mile
 // which check they have failed while they can still do something about it,
 // instead of refusing at the end with no explanation.
 
+// How long a live GPS fix gets before the screen gives up on it and shows the
+// stations anyway, sorted by the last known position or not at all.
+const LOCATION_TIMEOUT_MS = 6000;
+
 const STEP_TITLES: Record<FuelStep, string> = {
   station: "Where are you fuelling?",
   mileage: "Confirm the odometer",
@@ -67,11 +71,33 @@ export default function FuelScreen() {
     let position: { latitude: number; longitude: number } | null = null;
 
     if (status === "granted") {
+      // Bounded, because getCurrentPositionAsync is not.
+      //
+      // It waits for a fix and carries no timeout of its own, and the catch
+      // below only fires on an error -- never on "still trying". Indoors, at a
+      // depot or at home, it can simply never resolve, and this screen then
+      // sits on a spinner for as long as anyone is willing to watch it. That
+      // is the screen a driver opens standing at a pump.
+      //
+      // The last known fix returns instantly and is almost always good enough
+      // to sort a station list by distance. A live fix is better, so it still
+      // gets a few seconds, but it no longer gets the whole screen.
       try {
-        const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        position = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
+        const cached = await Location.getLastKnownPositionAsync();
+        if (cached) position = { latitude: cached.coords.latitude, longitude: cached.coords.longitude };
       } catch {
-        // Distances just show as unknown; the server still has the final say.
+        // No cached fix. The live attempt below may still produce one.
+      }
+
+      try {
+        const fix = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_TIMEOUT_MS)),
+        ]);
+        if (fix) position = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
+      } catch {
+        // Distances just show as unknown; the server still has the final say on
+        // whether the driver is close enough to a station.
       }
     }
 

@@ -151,7 +151,9 @@ export default function PayrollScreen() {
                 <View className="flex-row items-start justify-between">
                   <View>
                     <Text className="text-sm font-bold text-slate-900">Week {payslip.week}</Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">{payslip.year} -- {payslip.total_routes} routes</Text>
+                    <Text className="mt-0.5 text-xs text-slate-500">
+                      {payslip.year} -- {payslip.total_routes} {payslip.total_routes === 1 ? "route" : "routes"}
+                    </Text>
                   </View>
                   <View className="flex-row items-center gap-1 rounded-full bg-green-100 px-2.5 py-1">
                     <Feather name="check-circle" size={10} color="#166534" />
@@ -164,9 +166,15 @@ export default function PayrollScreen() {
                     <Text className="text-sm text-slate-600">Gross Earnings</Text>
                     <Text className="text-sm font-semibold text-slate-900">£{grossEarnings.toFixed(2)}</Text>
                   </View>
+                  {/* A fee of nothing is not a deduction. Shown flat rather than
+                      as "-£0.00" in red, which reads as money taken off. */}
                   <View className="flex-row justify-between border-t border-slate-100 px-4 py-2.5">
-                    <Text className="text-sm text-red-500">Admin Fee</Text>
-                    <Text className="text-sm font-semibold text-red-600">-£{payslip.admin_fee.toFixed(2)}</Text>
+                    <Text className={`text-sm ${payslip.admin_fee > 0 ? "text-red-500" : "text-slate-600"}`}>
+                      Admin Fee
+                    </Text>
+                    <Text className={`text-sm font-semibold ${payslip.admin_fee > 0 ? "text-red-600" : "text-slate-900"}`}>
+                      {payslip.admin_fee > 0 ? `-£${payslip.admin_fee.toFixed(2)}` : "£0.00"}
+                    </Text>
                   </View>
                   <View className="flex-row justify-between border-t border-slate-100 bg-slate-50 px-4 py-2.5">
                     <Text className="text-sm font-bold text-slate-900">Final Payable</Text>
