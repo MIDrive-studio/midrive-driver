@@ -265,6 +265,12 @@ export default function AccidentScreen() {
         site_id: driver.site_id,
         driver_id: driver.id,
         driver_name: driver.full_name,
+        // Who filed it. Every other table in both apps records this the same
+        // way -- the app supplies the signed-in user, since there is no default
+        // or trigger on the column anywhere in the schema. The office's own
+        // accident form has always set it; this screen never did, so a
+        // driver-filed report had no author at all.
+        created_by: driver.user_id,
         vehicle_id: vehicleId,
         vehicle_registration: draft.vehicleRegistration.trim().toUpperCase(),
         date_time: draft.date_time,
