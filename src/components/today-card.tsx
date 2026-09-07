@@ -20,6 +20,7 @@ type Assignment = {
   route: string | null;
   shift: string | null;
   notes: string | null;
+  is_owner_driver: boolean | null;
   vehicle: { registration: string } | null;
 };
 
@@ -56,9 +57,23 @@ export function TodayCard({ driverId }: { driverId: string }) {
     let cancelled = false;
 
     async function load() {
+      // Both vans are named by their column rather than left to PostgREST to
+      // work out.
+      //
+      // rota_assignments gained a second foreign key to vehicles when van
+      // assignment landed: vehicle_id for the van planned, actual_vehicle_id
+      // for the one taken. A plain vehicles(...) embed has been ambiguous ever
+      // since, and PostgREST refuses ambiguity rather than picking one -- so
+      // every read failed with "more than one relationship was found" and this
+      // card told every driver their route could not be read, every day,
+      // whether they had one or not.
       const { data, error } = await supabase
         .from("rota_assignments")
-        .select("route, shift, notes, vehicle:vehicles(registration)")
+        .select(
+          "route, shift, notes, is_owner_driver," +
+            " planned:vehicles!vehicle_id(registration)," +
+            " actual:vehicles!actual_vehicle_id(registration)"
+        )
         .eq("driver_id", driverId)
         .eq("date", todayISODate())
         .maybeSingle();
@@ -74,10 +89,22 @@ export function TodayCard({ driverId }: { driverId: string }) {
 
       // PostgREST embeds a to-one relation as an object; the generated types
       // describe every embed as an array. Normalised so the card does not care.
-      const row = data as (Omit<Assignment, "vehicle"> & { vehicle: { registration: string }[] | { registration: string } | null }) | null;
+      type Embedded = { registration: string }[] | { registration: string } | null;
+      const one = (v: Embedded) => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+
+      const row = data as
+        | (Omit<Assignment, "vehicle"> & { planned: Embedded; actual: Embedded })
+        | null;
+
       setAssignment(
         row
-          ? { ...row, vehicle: Array.isArray(row.vehicle) ? (row.vehicle[0] ?? null) : (row.vehicle ?? null) }
+          ? {
+              ...row,
+              // The van actually taken wins over the one planned, because by the
+              // time it is set it is the truth. Null until the day is confirmed,
+              // which is why the plan is still the usual answer in the morning.
+              vehicle: one(row.actual) ?? one(row.planned),
+            }
           : null
       );
       setLoading(false);
@@ -143,11 +170,16 @@ export function TodayCard({ driverId }: { driverId: string }) {
             value={assignment.route || "Not set"}
             muted={!assignment.route}
           />
+          {/* An owner driver has no fleet van by definition, so "Not assigned"
+              would read as something missing rather than as the arrangement. */}
           <Detail
             icon="truck"
             label="Van"
-            value={assignment.vehicle?.registration ?? "Not assigned"}
-            muted={!assignment.vehicle}
+            value={
+              assignment.vehicle?.registration ??
+              (assignment.is_owner_driver ? "Your own vehicle" : "Not assigned")
+            }
+            muted={!assignment.vehicle && !assignment.is_owner_driver}
           />
         </View>
 
