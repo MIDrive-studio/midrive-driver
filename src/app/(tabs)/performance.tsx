@@ -34,6 +34,9 @@ const TIER_STYLE: Record<Tier, { chip: string; text: string; bar: string }> = {
 /** How many weeks are fetched, and so how far the average rank looks back. */
 const RANK_WINDOW = 12;
 
+/** The tier bar, in points. Fixed so nothing has to resolve a percentage height. */
+const BAR_HEIGHT = 12;
+
 function formatMetric(value: number | null | undefined, spec: MetricSpec): string {
   if (value == null) return "--";
   if (spec.unit === "percent") return `${value}%`;
@@ -193,41 +196,72 @@ export default function PerformanceScreen() {
               {current.total_score != null && thresholds && (
                 <View className="mt-4 rounded-xl bg-white/10 p-3">
                   {target ? (
-                    <View className="mb-2 flex-row items-center justify-between">
-                      <Text className="text-xs text-slate-300">
-                        Next: <Text className="font-bold text-white">{TIER_LABEL[target.tier]}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>
+                        Next: <Text style={{ fontWeight: "700", color: "#ffffff" }}>{TIER_LABEL[target.tier]}</Text>
                       </Text>
-                      <Text className="text-xs text-slate-300">
-                        need <Text className="font-bold text-amber-300">+{target.needed.toFixed(1)}</Text>
+                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>
+                        need <Text style={{ fontWeight: "700", color: "#fcd34d" }}>+{target.needed.toFixed(1)}</Text>
                       </Text>
                     </View>
                   ) : (
-                    <Text className="mb-2 text-xs font-bold text-amber-300">Top tier reached</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#fcd34d", marginBottom: 8 }}>
+                      Top tier reached
+                    </Text>
                   )}
 
-                  <View className="relative h-3 w-full overflow-hidden rounded-full bg-white/20">
+                  {/* Geometry in plain styles, not classes. Mixing className with
+                      an inline style on one element drops the class-driven
+                      sizing, which turned a 12px bar into a blue shape the
+                      height of the phone -- overflow-hidden went with it, so
+                      nothing clipped it either. */}
+                  <View
+                    style={{
+                      height: BAR_HEIGHT,
+                      width: "100%",
+                      borderRadius: BAR_HEIGHT / 2,
+                      backgroundColor: "rgba(255,255,255,0.2)",
+                      overflow: "hidden",
+                      position: "relative",
+                    }}
+                  >
                     <View
-                      className="h-full rounded-full"
                       style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        height: BAR_HEIGHT,
                         width: `${Math.min(100, Math.max(0, current.total_score))}%`,
+                        borderRadius: BAR_HEIGHT / 2,
                         backgroundColor: tier ? TIER_STYLE[tier].bar : "#94a3b8",
                       }}
                     />
                     {bands.map((b) => (
                       <View
                         key={b.at}
-                        className="absolute top-0 h-full w-px bg-white/50"
-                        style={{ left: `${b.at}%` }}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: `${b.at}%`,
+                          height: BAR_HEIGHT,
+                          width: 1,
+                          backgroundColor: "rgba(255,255,255,0.55)",
+                        }}
                       />
                     ))}
                   </View>
 
-                  <View className="relative mt-1.5 h-4">
+                  <View style={{ position: "relative", height: 16, marginTop: 6 }}>
                     {bands.map((b) => (
                       <Text
                         key={`l${b.at}`}
-                        className="absolute text-[10px] text-slate-400"
-                        style={{ left: `${b.at}%`, transform: [{ translateX: -8 }] }}
+                        style={{
+                          position: "absolute",
+                          left: `${b.at}%`,
+                          fontSize: 10,
+                          color: "#94a3b8",
+                          transform: [{ translateX: -8 }],
+                        }}
                       >
                         {b.at}
                       </Text>
