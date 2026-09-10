@@ -23,13 +23,18 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
+// What a driver is told about a check they have already handed in.
+//
+// Deliberately never a verdict on the van. The analysis reaching "analysed"
+// with nothing found is not the end of the story: the office looks at the
+// photographs afterwards, and people find damage a model missed. Telling a
+// driver "No new damage" makes a promise the system cannot keep, and it is the
+// driver who gets held to it when a dent turns up later.
+//
+// So the tile says what is true and useful -- which van they checked, and when.
+// The only status worth passing on is the one that asks something of them.
 const RESULT: Record<string, string> = {
-  analysed: "No new damage",
-  approved: "Checked and approved",
-  requires_review: "With the office",
   rejected: "Needs doing again",
-  submitted: "Being checked",
-  processing: "Being checked",
 };
 
 export function VehicleCheckTile() {
@@ -106,10 +111,13 @@ export function VehicleCheckTile() {
           <Feather name="truck" size={15} color="#64748b" />
           <View className="flex-1">
             <Text className="text-base font-semibold text-ink">{check.van_registration}</Text>
+            {/* The time, and only a status that asks something of them. Where
+                the office has said nothing back, silence is the honest answer:
+                the check is in, and what it turns out to show is not settled
+                the moment the analysis finishes. */}
             <Text className="text-xs text-ink-subtle">
               {check.submitted_at ? formatTime(check.submitted_at) : "Earlier today"}
-              {" · "}
-              {RESULT[check.status] ?? "Recorded"}
+              {RESULT[check.status] ? ` · ${RESULT[check.status]}` : ""}
             </Text>
           </View>
         </View>
