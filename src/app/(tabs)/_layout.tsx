@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePendingAvailability } from "@/lib/availability-pending";
 
 export default function TabsLayout() {
   // The bar was 60px tall with 8px of bottom padding, both fixed, which put it
@@ -13,6 +14,11 @@ export default function TabsLayout() {
   // where nothing is reserved, so adding it costs nothing on the phones that
   // did work.
   const insets = useSafeAreaInsets();
+
+  // A request the driver has not answered is the one thing in this app that
+  // somebody else is waiting on, and it was findable only by opening the screen
+  // and reading it. The badge carries it to wherever they are.
+  const pending = usePendingAvailability();
 
   return (
     <Tabs
@@ -41,7 +47,12 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="availability"
-        options={{ title: "Availability", tabBarIcon: ({ color, size }) => <Feather name="calendar" size={size} color={color} /> }}
+        options={{
+          title: "Availability",
+          tabBarIcon: ({ color, size }) => <Feather name="calendar" size={size} color={color} />,
+          tabBarBadge: pending > 0 ? pending : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#dc2626", fontSize: 10, fontWeight: "700" },
+        }}
       />
       <Tabs.Screen
         name="fuel"
