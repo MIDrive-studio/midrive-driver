@@ -13,11 +13,15 @@ import {
   change,
   direction,
   focusArea,
+  metricAttainment,
   nextTarget,
   rankGained,
   tierFor,
+  tierTally,
   weightOf,
+  type Attainment,
   type Direction,
+  type MetricKey,
   type MetricSpec,
   type Tier,
 } from "@/lib/performance";
@@ -31,8 +35,31 @@ const TIER_STYLE: Record<Tier, { chip: string; text: string; bar: string }> = {
   Poor: { chip: "bg-red-600", text: "text-white", bar: "#dc2626" },
 };
 
-/** How many weeks are fetched, and so how far the average rank looks back. */
+/**
+ * How many weeks are fetched.
+ *
+ * Wide enough to hold a whole year of tiers plus the tail of the year before,
+ * so week 1 still has a week before it to compare against. Two years of rows
+ * for one driver is a small read; a year missing its first weeks because the
+ * fetch stopped at twelve is a wrong answer.
+ */
+const HISTORY_WINDOW = 120;
+
+/** How far back the average rank and the trend line look. */
 const RANK_WINDOW = 12;
+
+/**
+ * The three colours a metric can wear, and where the cut-offs sit.
+ *
+ * The band is the share of that metric's points the week earned -- see
+ * metricAttainment. Colour is never the only thing saying it: every tile
+ * carries the same figure in words underneath.
+ */
+const ATTAINMENT_STYLE: Record<Attainment["band"], { border: string; dot: string; text: string }> = {
+  strong: { border: "border-blue-300", dot: "bg-blue-600", text: "text-blue-700" },
+  watch: { border: "border-amber-300", dot: "bg-amber-500", text: "text-amber-700" },
+  short: { border: "border-red-300", dot: "bg-red-500", text: "text-red-600" },
+};
 
 /** The tier bar, in points. Fixed so nothing has to resolve a percentage height. */
 const BAR_HEIGHT = 12;
@@ -64,7 +91,7 @@ export default function PerformanceScreen() {
         .eq("driver_id", driver.id)
         .order("year", { ascending: false })
         .order("week_number", { ascending: false })
-        .limit(RANK_WINDOW),
+        .limit(HISTORY_WINDOW),
       // Bonuses are pay rather than performance, but they answer "did the score
       // do anything for me", which is the question this screen exists for.
       supabase
@@ -110,20 +137,40 @@ export default function PerformanceScreen() {
   const bands = bandMarks(thresholds);
   const scoreChange = change(current?.total_score, previous?.total_score);
 
-  const avgRank = useMemo(() => averageRank(weeks.map((w) => w.weekly_rank)), [weeks]);
-  const rankedWeeks = weeks.filter((w) => w.weekly_rank != null).length;
+  // Rank and the trend line still speak for the recent run rather than for the
+  // whole fetch: "average rank across 84 weeks" is a different claim from the
+  // one this card has always made, and not one a driver asked for.
+  const recent = useMemo(() => weeks.slice(0, RANK_WINDOW), [weeks]);
+
+  const avgRank = useMemo(() => averageRank(recent.map((w) => w.weekly_rank)), [recent]);
+  const rankedWeeks = recent.filter((w) => w.weekly_rank != null).length;
   const gained = rankGained(current?.weekly_rank, previous?.weekly_rank);
   const focus = focusArea(current, previous);
 
   // Oldest first, which is the direction a trend is read in.
   const trend = useMemo(
     () =>
-      [...weeks]
+      [...recent]
         .reverse()
         .filter((w) => w.total_score != null)
         .map((w) => ({ label: `W${w.week_number}`, score: Number(w.total_score) })),
-    [weeks]
+    [recent]
   );
+
+  // The year the latest row belongs to, rather than the calendar year -- a
+  // driver opening this in January wants the year they have rows for, not an
+  // empty card headed with today's date.
+  const year = useMemo(() => (current ? tierTally(weeks, current.year) : null), [weeks, current]);
+
+  const attainment = useMemo(() => {
+    const out: Partial<Record<MetricKey, Attainment | null>> = {};
+    if (current) {
+      for (const spec of DRIVER_METRICS) {
+        out[spec.key] = metricAttainment(spec.key, current[spec.key] as number | null, current.weights_used);
+      }
+    }
+    return out;
+  }, [current]);
 
   if (loading) {
     return (
@@ -351,25 +398,43 @@ export default function PerformanceScreen() {
             {/* -------------------------------------------------------- */}
             {/* The numbers the score is made of                         */}
             {/* -------------------------------------------------------- */}
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Key metrics</Text>
+            <Text className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Key metrics</Text>
+            <Text className="mb-2 text-xs text-slate-400">
+              Colour and figure are the share of each metric&apos;s points you earned that week.
+            </Text>
             <View className="mb-4 flex-row flex-wrap justify-between">
               {DRIVER_METRICS.map((spec) => {
                 const now = current[spec.key] as number | null;
                 const before = previous?.[spec.key] as number | null | undefined;
                 const moved = direction(now, before, spec.lowerIsBetter);
                 const delta = change(now, before);
+                const earned = attainment[spec.key] ?? null;
 
                 return (
                   <Pressable
                     key={spec.key}
                     onPress={() => setOpenMetric(spec)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${spec.label}, ${formatMetric(now, spec)}`}
-                    className="mb-2.5 rounded-xl border border-slate-200 bg-white p-4 active:bg-slate-50"
+                    accessibilityLabel={
+                      `${spec.label}, ${formatMetric(now, spec)}` +
+                      (earned ? `, ${earned.percent}% of its points` : "")
+                    }
+                    className={`mb-2.5 rounded-xl border bg-white p-4 active:bg-slate-50 ${
+                      earned ? ATTAINMENT_STYLE[earned.band].border : "border-slate-200"
+                    }`}
                     style={{ width: "48.5%" }}
                   >
                     <Text className="text-xs leading-tight text-slate-500">{spec.label}</Text>
                     <Text className="mt-1 text-2xl font-bold text-slate-900">{formatMetric(now, spec)}</Text>
+
+                    {earned && (
+                      <View className="mt-1 flex-row items-center gap-1.5">
+                        <View className={`h-2 w-2 rounded-full ${ATTAINMENT_STYLE[earned.band].dot}`} />
+                        <Text className={`text-xs font-semibold ${ATTAINMENT_STYLE[earned.band].text}`}>
+                          {earned.percent}% of its points
+                        </Text>
+                      </View>
+                    )}
 
                     {before != null && (
                       <Text className="mt-0.5 text-xs text-slate-400">Last week: {formatMetric(before, spec)}</Text>
@@ -392,46 +457,72 @@ export default function PerformanceScreen() {
             )}
 
             {/* -------------------------------------------------------- */}
-            {/* Every week we hold                                       */}
+            {/* The year, tier by tier                                    */}
             {/* -------------------------------------------------------- */}
-            <View className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <View className="border-b border-slate-100 px-4 py-3">
-                <Text className="text-sm font-semibold text-slate-700">Weekly history</Text>
-              </View>
+            {/* This replaced a week-by-week table. Twelve rows of rank and
+                score answered "what happened in week 31", which is a question
+                about one week rather than about a year. How many weeks were
+                Fantastic is the shape of the year, and the trend above still
+                carries the recent run week by week. */}
+            {year && (
+              <View className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <View className="flex-row items-baseline justify-between border-b border-slate-100 px-4 py-3">
+                  <Text className="text-sm font-semibold text-slate-700">Your {current.year}</Text>
+                  <Text className="text-xs text-slate-400">
+                    {year.scored} scored week{year.scored === 1 ? "" : "s"}
+                  </Text>
+                </View>
 
-              <View className="flex-row border-b border-slate-100 bg-slate-50 px-4 py-2">
-                <Text className="w-16 text-xs font-semibold text-slate-500">Week</Text>
-                <Text className="w-12 text-xs font-semibold text-slate-500">Rank</Text>
-                <Text className="w-14 text-xs font-semibold text-slate-500">Score</Text>
-                <Text className="flex-1 text-xs font-semibold text-slate-500">Tier</Text>
-              </View>
-
-              {weeks.map((w) => {
-                const rowTier = tierFor(w.total_score, w.thresholds_used ?? null);
-                return (
-                  <View key={w.id} className="flex-row items-center border-b border-slate-50 px-4 py-2.5">
-                    <Text className="w-16 text-sm font-medium text-slate-700">W{w.week_number}</Text>
-                    <Text className="w-12 text-sm text-slate-600">
-                      {w.weekly_rank != null ? `#${w.weekly_rank}` : "--"}
-                    </Text>
-                    <Text className="w-14 text-sm font-bold text-slate-900">
-                      {w.total_score?.toFixed(1) ?? "--"}
-                    </Text>
-                    <View className="flex-1 flex-row">
-                      {rowTier ? (
-                        <View className={`rounded-full px-2 py-0.5 ${TIER_STYLE[rowTier].chip}`}>
-                          <Text className={`text-[10px] font-bold ${TIER_STYLE[rowTier].text}`}>
-                            {TIER_LABEL[rowTier]}
-                          </Text>
+                {year.scored === 0 ? (
+                  <Text className="px-4 py-6 text-center text-sm text-slate-400">
+                    No scored weeks in {current.year} yet.
+                  </Text>
+                ) : (
+                  <View className="gap-3 px-4 py-4">
+                    {year.counts.map(({ tier: rowTier, weeks: count }) => (
+                      <View key={rowTier} className="flex-row items-center gap-3">
+                        <View className="w-[76px]">
+                          <View className={`self-start rounded-full px-2 py-0.5 ${TIER_STYLE[rowTier].chip}`}>
+                            <Text className={`text-[10px] font-bold ${TIER_STYLE[rowTier].text}`}>
+                              {TIER_LABEL[rowTier]}
+                            </Text>
+                          </View>
                         </View>
-                      ) : (
-                        <Text className="text-xs text-slate-400">--</Text>
-                      )}
-                    </View>
+
+                        {/* Bar geometry in plain styles rather than classes,
+                            for the same reason as the tier bar above. */}
+                        <View
+                          style={{
+                            flex: 1,
+                            height: 10,
+                            borderRadius: 5,
+                            backgroundColor: "#f1f5f9",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <View
+                            style={{
+                              height: 10,
+                              borderRadius: 5,
+                              width: `${(count / year.scored) * 100}%`,
+                              backgroundColor: TIER_STYLE[rowTier].bar,
+                            }}
+                          />
+                        </View>
+
+                        <Text
+                          className={`w-7 text-right text-base font-bold ${
+                            count > 0 ? "text-slate-900" : "text-slate-300"
+                          }`}
+                        >
+                          {count}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                );
-              })}
-            </View>
+                )}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -440,6 +531,7 @@ export default function PerformanceScreen() {
         spec={openMetric}
         week={current}
         previous={previous}
+        earned={openMetric ? (attainment[openMetric.key] ?? null) : null}
         onClose={() => setOpenMetric(null)}
       />
     </SafeAreaView>
@@ -475,11 +567,13 @@ function MetricDetail({
   spec,
   week,
   previous,
+  earned,
   onClose,
 }: {
   spec: MetricSpec | null;
   week: PerformanceWeeklyDriver | undefined;
   previous: PerformanceWeeklyDriver | undefined;
+  earned: Attainment | null;
   onClose: () => void;
 }) {
   if (!spec || !week) return null;
@@ -525,6 +619,13 @@ function MetricDetail({
               <Text className="text-sm text-slate-700">
                 This metric was worth <Text className="font-bold">{weight} points</Text> of your score that week.
               </Text>
+              {earned && weight > 0 && (
+                <Text className="mt-1 text-sm text-slate-700">
+                  You earned{" "}
+                  <Text className={`font-bold ${ATTAINMENT_STYLE[earned.band].text}`}>{earned.percent}%</Text> of
+                  them, which is {((earned.percent / 100) * weight).toFixed(1)} points.
+                </Text>
+              )}
               {weight === 0 && (
                 <Text className="mt-1 text-xs text-slate-500">
                   It is recorded but carries no points, so it does not move your total.
