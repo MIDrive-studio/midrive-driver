@@ -68,6 +68,27 @@ export async function isShiftActive(): Promise<boolean> {
   return TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
 }
 
+/**
+ * Whether location sharing has already been agreed to, without asking again.
+ *
+ * The shift now begins with the vehicle check rather than with a button, and
+ * that must never mean background location starting on its own. Google requires
+ * the prominent disclosure before the request, and a driver is entitled to
+ * decide once and have the answer remembered -- not to be asked every morning,
+ * and not to be tracked because a check happened to be submitted.
+ *
+ * So the automatic start is conditional on this: already agreed, the shift
+ * begins quietly; not agreed, the driver is asked, once, in the open.
+ */
+export async function locationAlreadyAgreed(): Promise<boolean> {
+  const [foreground, background] = await Promise.all([
+    Location.getForegroundPermissionsAsync(),
+    Location.getBackgroundPermissionsAsync(),
+  ]);
+
+  return foreground.status === "granted" && background.status === "granted";
+}
+
 /** When the current shift began, or null when there is no shift. */
 export async function shiftStartedAt(): Promise<number | null> {
   const raw = await AsyncStorage.getItem(DRIVER_CONTEXT_KEY);

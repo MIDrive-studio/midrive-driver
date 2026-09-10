@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { ProfileCompletionCard } from "@/components/profile-completion-card";
-import { ShiftToggle } from "@/components/shift-toggle";
+import { ShiftCard } from "@/components/shift-card";
 import { NavTile } from "@/components/nav-tile";
 import { HomeAvailabilityTile } from "@/components/home-availability-tile";
 import { AccidentReportTile } from "@/components/accident-report-tile";
@@ -56,7 +56,7 @@ export default function HomeScreen() {
 
         <ProfileCompletionCard driver={driver} />
 
-        <ShiftToggle driver={driver} />
+        <ShiftCard driver={driver} />
 
         <Text className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
           Everything else
