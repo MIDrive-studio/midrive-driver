@@ -209,6 +209,6 @@ export async function lookupPostcode(postcode: string) {
  * so coverage is good rather than complete. An empty list is an ordinary
  * answer, not a failure, and the form stays typeable either way.
  */
-export async function searchAddresses(query: string) {
-  return portalPost<{ addresses: PickableAddress[] }>("/api/driver/address-search", { query });
+export async function searchAddresses(query: string, near?: string) {
+  return portalPost<{ addresses: PickableAddress[] }>("/api/driver/address-search", { query, near });
 }

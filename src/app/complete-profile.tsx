@@ -230,7 +230,7 @@ export default function CompleteProfileScreen() {
           <Text className="mb-6 text-slate-500">
             {onboarding
               ? "We need a few more details before you can start using the app."
-              : "Keep these up to date. Payroll needs your bank details, UTR and NI number before it can pay you."}
+              : "Keep these up to date. Payroll needs your bank details and NI number before it can pay you."}
           </Text>
 
           {error && (
@@ -256,13 +256,14 @@ export default function CompleteProfileScreen() {
           <Field label="Relationship to You" value={form.next_of_kin_relationship} onChangeText={(v) => set("next_of_kin_relationship", v)} placeholder="Partner, parent, friend..." autoCapitalize="words" />
 
           <Text className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tax & Banking</Text>
-          {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so a
-              new driver cannot supply one and must not be blocked waiting for it.
-              Saying when it is needed is more use than marking it required. */}
+          {/* Optional on purpose. HMRC takes weeks or months to issue a UTR, so
+              a new driver cannot supply one -- and payroll does not need it to
+              pay them, so there is nothing to block. Asking them to apply and
+              come back is more use than marking a field required. */}
           <Field label="UTR Number (when you have it)" value={form.utr_number} onChangeText={(v) => set("utr_number", v)} keyboardType="numeric" maxLength={10} />
           <Text className="-mt-3 mb-4 text-xs text-slate-500">
-            Leave blank if HMRC has not sent yours yet. You can add it here any time — payroll needs it
-            before it can pay you as self-employed.
+            Leave blank if HMRC has not sent yours yet — you can still be paid. Apply as soon as you can, and add it
+            here the moment it arrives.
           </Text>
           <Field label="NI Number" value={form.ni_number} onChangeText={(v) => set("ni_number", v.toUpperCase())} autoCapitalize="characters" maxLength={9} />
 

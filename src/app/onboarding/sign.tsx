@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -270,7 +271,7 @@ export default function SignStep() {
       <SafeAreaView className="flex-1 items-center justify-center bg-canvas px-8">
         <Text className="mb-2 text-center text-base font-semibold text-ink">Couldn&apos;t open this document</Text>
         <Text className="mb-6 text-center text-sm text-ink-muted">{error ?? "Please try again in a moment."}</Text>
-        <Pressable onPress={() => router.back()} className="rounded-xl bg-marine-600 px-6 py-3">
+        <Pressable onPress={() => leaveStep(router)} className="rounded-xl bg-marine-600 px-6 py-3">
           <Text className="text-sm font-semibold text-white">Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -288,7 +289,7 @@ export default function SignStep() {
           {doc.title} is signed and filed. A copy is kept with your records.
         </Text>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => leaveStep(router)}
           className="mt-6 rounded-xl bg-marine-600 px-6 py-3.5 active:bg-marine-700"
         >
           <Text className="text-base font-semibold text-white">Next document</Text>
@@ -301,7 +302,7 @@ export default function SignStep() {
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 border-b border-line px-4 py-3">
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => leaveStep(router)}
           hitSlop={12}
           className="p-1"
         >

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -7,6 +8,7 @@ import { Feather } from "@expo/vector-icons";
 import { useFramingGuidance } from "@/lib/framing-guidance";
 import { leaveCapturedDocument } from "@/lib/captured-document";
 import type { PickedPhoto } from "@/lib/document-upload";
+import { SHAPE_RATIO, type DocumentShape } from "@/lib/right-to-work";
 
 // Photographing a document, with somewhere to put it.
 //
@@ -17,18 +19,32 @@ import type { PickedPhoto } from "@/lib/document-upload";
 // main reason the reader fails to read one.
 //
 // A box on the screen fixes that without asking the driver to understand
-// anything: fill the box. The box is the real shape of the card -- ID-1,
-// 85.6mm by 54mm, which every driving licence, passport card and residence
-// permit in the world is cut to -- so a card that fills it is square on and
-// close enough to read.
+// anything: fill the box. It is cut to the real shape of whatever they said
+// they were sending -- a bank card, an open passport, or an A4 certificate --
+// so a document that fills it is square on and close enough to read.
+//
+// The shape matters more than it looks. A card-shaped box round a birth
+// certificate tells the driver to do the wrong thing and they will do it: the
+// box is the instruction, not the caption under it.
 //
 // Built on the same pieces as the vehicle walk-around camera, which has done
 // this for van photographs since before this existed: a live CameraView, an
 // outline over it, and the accelerometer telling the driver to hold the phone
 // flat. Nothing new was needed.
 
-/** ID-1, the bank-card shape every identity document is cut to. */
-const CARD_ASPECT = 85.6 / 54;
+// What the driver is being asked to line up, in words, per shape. The box
+// itself is the instruction; this is the sentence under it.
+const GUIDANCE: Record<DocumentShape, string> = {
+  card: "Lay the card flat and fill the box. Keep all four corners inside it.",
+  passport: "Open the passport at the photo page, lay it flat, and fill the box.",
+  document: "Lay the certificate flat and fill the box. Keep all four corners inside it.",
+};
+
+const SHAPE_NAME: Record<DocumentShape, string> = {
+  card: "card",
+  passport: "passport",
+  document: "certificate",
+};
 
 const TITLES: Record<string, string> = {
   drivers_licence: "Driving licence",
@@ -37,7 +53,12 @@ const TITLES: Record<string, string> = {
 
 export default function CaptureDocumentScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ kind?: string; side?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; side?: string; shape?: string }>();
+  // The box is cut to what the driver is actually holding. A card-shaped box
+  // round an A4 certificate tells them to do the wrong thing, and they will
+  // do it -- the box is the instruction, not the caption.
+  const shape: DocumentShape =
+    params.shape === "passport" || params.shape === "document" ? params.shape : "card";
   const side: "front" | "back" = params.side === "back" ? "back" : "front";
   const title = TITLES[params.kind ?? ""] ?? "Document";
 
@@ -69,7 +90,7 @@ export default function CaptureDocumentScreen() {
   function keep() {
     if (!pending) return;
     leaveCapturedDocument(side, pending);
-    router.back();
+    leaveStep(router);
   }
 
   // --- Permission -----------------------------------------------------------
@@ -93,7 +114,7 @@ export default function CaptureDocumentScreen() {
         <Pressable onPress={requestPermission} className="rounded-xl bg-white px-6 py-3">
           <Text className="text-sm font-semibold text-slate-900">Allow camera</Text>
         </Pressable>
-        <Pressable onPress={() => router.back()} className="mt-3 px-6 py-3">
+        <Pressable onPress={() => leaveStep(router)} className="mt-3 px-6 py-3">
           <Text className="text-sm font-semibold text-white/70">Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -144,7 +165,7 @@ export default function CaptureDocumentScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => leaveStep(router)}
             accessibilityRole="button"
             accessibilityLabel="Close the camera"
             hitSlop={10}
@@ -159,8 +180,8 @@ export default function CaptureDocumentScreen() {
             means square on and close enough to read. */}
         <View className="flex-1 items-center justify-center px-5" pointerEvents="none">
           <View
-            style={{ aspectRatio: CARD_ASPECT }}
-            className={`w-full rounded-2xl border-2 ${
+            style={{ aspectRatio: SHAPE_RATIO[shape] }}
+            className={`rounded-2xl border-2 ${shape === "document" ? "h-full" : "w-full"} ${
               guidance.ok ? "border-white" : "border-white/45"
             }`}
           >
@@ -186,12 +207,12 @@ export default function CaptureDocumentScreen() {
                 color={guidance.ok ? "#a7f3d0" : "#ffffff"}
               />
               <Text className="text-sm font-semibold text-white">
-                {guidance.ok ? "Fill the box with the card" : guidance.message}
+                {guidance.ok ? `Fill the box with the ${SHAPE_NAME[shape]}` : guidance.message}
               </Text>
             </View>
 
             <Text className="mt-2 px-6 text-center text-xs leading-5 text-white/85">
-              Lay it flat, fill the box, and keep the whole card inside the corners. Avoid glare on the photo.
+              {GUIDANCE[shape]} Avoid glare on the photo.
             </Text>
           </View>
 

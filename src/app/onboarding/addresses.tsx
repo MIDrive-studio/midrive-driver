@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { leaveStep } from "@/lib/go-back";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -148,6 +149,53 @@ export default function AddressesStep() {
 
   const cover = addressCover(lines);
 
+  /** One search at a time, with the newest answer winning. */
+  const runSearch = useCallback(async (query: string, near: string | undefined) => {
+    // Marks this as the newest search. Anything older that lands after it is
+    // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
+    // not end with the first answer overwriting the second.
+    const mine = ++searchSeq.current;
+
+    setSearching(true);
+    const result = await searchAddresses(query, near);
+
+    if (mine !== searchSeq.current) return;
+
+    setSearching(false);
+
+    if (!result.ok) {
+      setSuggestions(null);
+      setSearchNote(
+        result.unavailable
+          ? "Address search is not available just now. Type the address in below."
+          : result.error
+      );
+      return;
+    }
+
+    const { addresses } = result.value;
+    setSuggestions(addresses);
+    // Said plainly. Open data does not have every house, and a driver whose
+    // address is missing needs to know to type it rather than keep trying.
+    setSearchNote(addresses.length === 0 ? "No match. Type the address in below." : null);
+  }, []);
+
+  // Roughly where to look, as a value rather than a function so the search
+  // below can depend on it.
+  //
+  // "67 Chiltern" on its own matches eight streets in eight counties and
+  // offers none of the right one. The postcode on the form is the best hint
+  // when it is there; the last address already entered is the next best,
+  // because people move locally more often than not. It only reorders the
+  // results -- an address at the other end of the country is still found.
+  //
+  // Watched, not merely read: a driver who searches, gets nothing useful, and
+  // then fills in their postcode should see the search run again rather than
+  // be left with the bad results until they edit the query.
+  const hint = isComplete(form.postcode)
+    ? form.postcode
+    : (lines.find((l) => l.postcode)?.postcode ?? undefined);
+
   /**
    * Searching, on a pause rather than a keystroke.
    *
@@ -170,43 +218,13 @@ export default function AddressesStep() {
     }
 
     const timer = setTimeout(() => {
-      runSearch(query);
+      runSearch(query, hint);
     }, 350);
 
     // Typing again before the timer fires cancels it, which is why holding a
     // key down does not queue a request per repeat.
     return () => clearTimeout(timer);
-  }, [search]);
-
-  async function runSearch(query: string) {
-    // Marks this as the newest search. Anything older that lands after it is
-    // discarded rather than shown -- typing "14 Lut" then "14 Luton Road" must
-    // not end with the first answer overwriting the second.
-    const mine = ++searchSeq.current;
-
-    setSearching(true);
-    const result = await searchAddresses(query);
-
-    if (mine !== searchSeq.current) return;
-
-    setSearching(false);
-
-    if (!result.ok) {
-      setSuggestions(null);
-      setSearchNote(
-        result.unavailable
-          ? "Address search is not available just now. Type the address in below."
-          : result.error
-      );
-      return;
-    }
-
-    const { addresses } = result.value;
-    setSuggestions(addresses);
-    // Said plainly. Open data does not have every house, and a driver whose
-    // address is missing needs to know to type it rather than keep trying.
-    setSearchNote(addresses.length === 0 ? "No match. Type the address in below." : null);
-  }
+  }, [search, hint, runSearch]);
 
   /** Everything the record held, onto the form, in one go. */
   function pick(address: PickableAddress) {
@@ -337,7 +355,7 @@ export default function AddressesStep() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-2 px-4 py-3">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-1">
+        <Pressable onPress={() => leaveStep(router)} hitSlop={12} className="p-1">
           <Feather name="chevron-left" size={24} color="#1f5089" />
         </Pressable>
         <Text className="text-lg font-bold text-ink">Where you have lived</Text>
@@ -526,7 +544,7 @@ export default function AddressesStep() {
 
           {cover.covered ? (
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => leaveStep(router)}
               className="mt-5 items-center rounded-xl bg-marine-600 py-4 active:bg-marine-700"
             >
               <Text className="text-base font-semibold text-white">Done</Text>

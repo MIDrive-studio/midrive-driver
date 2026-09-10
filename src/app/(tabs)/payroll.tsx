@@ -79,7 +79,14 @@ export default function PayrollScreen() {
   const start = startOfWeek(todayISODate());
   const weekLabel = weekRangeLabel(start, addDays(start, 6));
 
-  const grossPay = currentWeek ? currentWeek.base_pay + currentWeek.stops_bonus + currentWeek.additional_amount : 0;
+  // Deliberately not called gross. The gross_pay column in the office is base
+  // plus stops and nothing else; this is base plus stops plus additions, which
+  // is one deduction away from its net_pay. Borrowing the word would invite a
+  // later edit to read gross_pay instead, which is a different number.
+  // scripts/payroll-adds-up.mts in the portal holds the two definitions together.
+  const earningsBeforeDeductions = currentWeek
+    ? currentWeek.base_pay + currentWeek.stops_bonus + currentWeek.additional_amount
+    : 0;
   const deductions = currentWeek?.deductions_amount ?? 0;
 
   return (
@@ -121,7 +128,7 @@ export default function PayrollScreen() {
             </View>
             <View className="flex-row items-center justify-between border-t border-slate-200 bg-slate-900 px-5 py-4">
               <Text className="text-sm text-slate-400">Provisional Total</Text>
-              <Text className="text-2xl font-bold text-amber-400">£{Math.max(0, grossPay - deductions).toFixed(2)}</Text>
+              <Text className="text-2xl font-bold text-amber-400">£{Math.max(0, earningsBeforeDeductions - deductions).toFixed(2)}</Text>
             </View>
           </View>
         )}
@@ -144,7 +151,9 @@ export default function PayrollScreen() {
                 <View className="flex-row items-start justify-between">
                   <View>
                     <Text className="text-sm font-bold text-slate-900">Week {payslip.week}</Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">{payslip.year} -- {payslip.total_routes} routes</Text>
+                    <Text className="mt-0.5 text-xs text-slate-500">
+                      {payslip.year} -- {payslip.total_routes} {payslip.total_routes === 1 ? "route" : "routes"}
+                    </Text>
                   </View>
                   <View className="flex-row items-center gap-1 rounded-full bg-green-100 px-2.5 py-1">
                     <Feather name="check-circle" size={10} color="#166534" />
@@ -157,9 +166,15 @@ export default function PayrollScreen() {
                     <Text className="text-sm text-slate-600">Gross Earnings</Text>
                     <Text className="text-sm font-semibold text-slate-900">£{grossEarnings.toFixed(2)}</Text>
                   </View>
+                  {/* A fee of nothing is not a deduction. Shown flat rather than
+                      as "-£0.00" in red, which reads as money taken off. */}
                   <View className="flex-row justify-between border-t border-slate-100 px-4 py-2.5">
-                    <Text className="text-sm text-red-500">Admin Fee</Text>
-                    <Text className="text-sm font-semibold text-red-600">-£{payslip.admin_fee.toFixed(2)}</Text>
+                    <Text className={`text-sm ${payslip.admin_fee > 0 ? "text-red-500" : "text-slate-600"}`}>
+                      Admin Fee
+                    </Text>
+                    <Text className={`text-sm font-semibold ${payslip.admin_fee > 0 ? "text-red-600" : "text-slate-900"}`}>
+                      {payslip.admin_fee > 0 ? `-£${payslip.admin_fee.toFixed(2)}` : "£0.00"}
+                    </Text>
                   </View>
                   <View className="flex-row justify-between border-t border-slate-100 bg-slate-50 px-4 py-2.5">
                     <Text className="text-sm font-bold text-slate-900">Final Payable</Text>

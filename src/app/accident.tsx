@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { bytesOf, looksLikeJpeg } from "@/lib/local-file";
+import { lookupVehicle } from "@/lib/inspection";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +37,10 @@ import type { AccidentDraft, AccidentStep, EvidenceItem } from "@/types/accident
 
 const DRAFT_KEY = (driverId: string) => `accident_report_draft_${driverId}`;
 const MAX_EVIDENCE = 12;
+
+// How long a live GPS fix gets before the pin falls back to the last known
+// position, or to being dragged by hand.
+const LOCATION_TIMEOUT_MS = 6000;
 
 const STEP_TITLES: Record<AccidentStep, string> = {
   vehicle: "Enter vehicle registration",
@@ -151,9 +157,29 @@ export default function AccidentScreen() {
       return;
     }
 
+    // Bounded, for the same reason as the fuel screen: getCurrentPositionAsync
+    // waits for a fix and has no timeout, and the catch below only fires on an
+    // error, never on "still trying". Someone standing at the roadside after an
+    // accident is the last person who should be watching a spinner -- and the
+    // pin can be dragged, so a rough position now beats an exact one later.
     try {
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      update({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      const cached = await Location.getLastKnownPositionAsync();
+      if (cached) update({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
+    } catch {
+      // No cached fix; the live attempt below may still produce one.
+    }
+
+    try {
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_TIMEOUT_MS)),
+      ]);
+
+      if (position) {
+        update({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      } else if (draft.latitude == null) {
+        setError("Couldn't get a location fix. Drag the pin to where it happened.");
+      }
     } catch {
       setError("Couldn't get your location. Check your signal and try again.");
     }
@@ -210,6 +236,28 @@ export default function AccidentScreen() {
     // actually working at that day -- their loan destination when on loan, their
     // own site otherwise. So it is read back rather than assumed, and the
     // evidence below is filed against whichever site the report landed on.
+    // Attach the report to the van itself, not only to a string naming it.
+    //
+    // The office's own accident form picks a vehicle from a list and records
+    // vehicle_id; this screen only ever stored the registration as text. So the
+    // same event linked to the van when the office typed it and did not when
+    // the driver did, and the vehicle's own history was the thing that lost
+    // out -- three of the four reports on file are unattached.
+    //
+    // Reusing the lookup the walk-around already uses: case-insensitive,
+    // space-insensitive, scoped to the driver's company. Null when nothing
+    // matches, which the column allows and which is the right answer for a van
+    // that is not on the fleet.
+    let vehicleId: string | null = null;
+    try {
+      const found = await lookupVehicle(draft.vehicleRegistration);
+      vehicleId = found?.vehicle_id ?? null;
+    } catch {
+      // A failed lookup must not cost the driver their report. It lands
+      // unlinked, exactly as before, with the registration still on it for the
+      // office to match up.
+    }
+
     const { data: report, error: reportError } = await supabase
       .from("accident_reports")
       .insert({
@@ -217,6 +265,13 @@ export default function AccidentScreen() {
         site_id: driver.site_id,
         driver_id: driver.id,
         driver_name: driver.full_name,
+        // Who filed it. Every other table in both apps records this the same
+        // way -- the app supplies the signed-in user, since there is no default
+        // or trigger on the column anywhere in the schema. The office's own
+        // accident form has always set it; this screen never did, so a
+        // driver-filed report had no author at all.
+        created_by: driver.user_id,
+        vehicle_id: vehicleId,
         vehicle_registration: draft.vehicleRegistration.trim().toUpperCase(),
         date_time: draft.date_time,
         latitude: draft.latitude,
@@ -247,8 +302,15 @@ export default function AccidentScreen() {
       try {
         const extension = item.media_type === "video" ? "mp4" : "jpg";
         const path = `${report.site_id}/${report.id}/${Date.now()}-${index}.${extension}`;
-        const response = await fetch(item.uri);
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await bytesOf(item.uri);
+
+        // A photograph is checked; a video is only checked for being there,
+        // since its first bytes vary by container and this is evidence of an
+        // accident -- refusing one for failing a format guess would be worse
+        // than storing something odd.
+        if (item.media_type === "video" ? bytes.length < 1024 : !looksLikeJpeg(bytes)) {
+          throw new Error("That attachment did not save properly.");
+        }
 
         const { error: uploadError } = await supabase.storage
           .from("accident-evidence")
@@ -269,7 +331,17 @@ export default function AccidentScreen() {
       }
     }
 
+    // Clear the draft in memory as well as in storage.
+    //
+    // Removing only the stored copy left the filled-in draft sitting in state,
+    // and the effect that saves on every change wrote it straight back. So
+    // after a successful submit the screen offered to "Resume your report" --
+    // the report that had just been filed -- and a driver following that prompt
+    // would file the same accident twice. This is what discardDraft does, and
+    // for the same reason.
     if (driverId) await AsyncStorage.removeItem(DRAFT_KEY(driverId)).catch(() => {});
+    setDraft(emptyDraft());
+    setShowResume(false);
     setSubmitting(false);
 
     Alert.alert(

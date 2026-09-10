@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import { bytesOf, looksLikeJpeg } from "@/lib/local-file";
 import * as ImageManipulator from "expo-image-manipulator";
 import { supabase } from "@/lib/supabase";
 
@@ -78,9 +79,32 @@ export async function prepareForReading(photo: PickedPhoto): Promise<string | nu
   return (await prepare(photo)).base64;
 }
 
+/**
+ * The photo, from the phone into the bucket.
+ *
+ * Read through expo-file-system rather than fetch(). fetch() on a file:// URI
+ * used to work and quietly stopped: it began answering with a perfectly
+ * ordinary response whose body was the text "File not found", which was then
+ * uploaded as though it were a photograph. Three documents reached the office
+ * as fourteen bytes each, marked as filed and waiting to be checked.
+ *
+ * So the bytes are checked before they are sent. A photograph that is too
+ * small to be one, or that does not begin like a JPEG, is refused here where
+ * the driver can take another -- not stored, filed, and discovered days later
+ * by somebody clicking an image that will not load.
+ */
 async function upload(uri: string, path: string): Promise<string | null> {
-  const response = await fetch(uri);
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  let bytes: Uint8Array;
+
+  try {
+    bytes = await bytesOf(uri);
+  } catch (e) {
+    return `the photo could not be read back (${(e as Error).message})`;
+  }
+
+  if (!looksLikeJpeg(bytes)) {
+    return `the photo came back as ${bytes.length} bytes and not an image, so it did not save properly`;
+  }
 
   const { error } = await supabase.storage.from("driver-documents").upload(path, bytes, {
     contentType: "image/jpeg",
@@ -95,6 +119,12 @@ export type Confirmed = {
   expiresOn: string | null;
   /** DVLA check code, licence only. */
   checkCode?: string | null;
+  /** Which right-to-work route this is: british, eu or other. */
+  nationalityBasis?: string | null;
+  /** What the document actually is, within its type -- a passport, a visa. */
+  documentKind?: string | null;
+  /** Home Office share code. Required on every route but the British one. */
+  shareCode?: string | null;
   /** What the machine read, kept beside what the person confirmed. */
   extracted?: unknown;
 };
@@ -152,6 +182,9 @@ export async function sendDocument({
     document_number: confirmed.documentNumber,
     expires_on: confirmed.expiresOn,
     check_code: confirmed.checkCode ?? null,
+    nationality_basis: confirmed.nationalityBasis ?? null,
+    document_kind: confirmed.documentKind ?? null,
+    share_code: confirmed.shareCode ?? null,
     extracted: confirmed.extracted ?? null,
     created_by: userId ?? null,
   });
