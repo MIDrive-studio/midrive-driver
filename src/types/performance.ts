@@ -25,5 +25,8 @@ export type PerformanceWeeklyDriver = {
   // The rules this row was judged against, written at import so a later change
   // in the office cannot redraw a week that has already been scored.
   weights_used: Record<string, number> | null;
+  /** What each metric earned, as a percentage of its own points. Written at
+   *  import from the office's bands, which this app deliberately does not have. */
+  metric_scores: Record<string, number> | null;
   thresholds_used: Thresholds | null;
 };

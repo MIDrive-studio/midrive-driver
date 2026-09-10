@@ -1,80 +1,20 @@
-// The band tables, locked.
+// What the performance screen works out for itself, and what it refuses to.
 //
-// metricAttainment colours a metric by the share of its points the week
-// earned, and those bands are the admin portal's -- copied out of
-// midrive-v2/lib/performance/scoring.ts because they are not written onto the
-// row the way weights_used and thresholds_used are. That makes them a second
-// copy of a business rule, and second copies drift.
+// The band tables used to live here too, copied from the admin portal, and
+// most of this file was an alarm on them drifting. They are gone: metric_scores
+// arrives on the row now, written at import from the office's own bands, so
+// there is nothing left in this app to drift.
 //
-// This file is the alarm. Every boundary is written out longhand, so retuning
-// a band in the phone fails here and has to be done on purpose. And where the
-// portal happens to be checked out beside this repo, the two tables are
-// compared character by character, which catches the drift that matters: the
-// office moving a band and nobody moving it here.
+// What remains worth proving is the part the app still decides -- where the
+// colour cut-offs sit, and the four cases where it declines to colour anything
+// at all rather than guessing.
 //
 // Run: npm run test:attainment
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 
-import {
-  metricAttainment,
-  scoreCC,
-  scoreCDF,
-  scoreCE,
-  scoreDCR,
-  scoreDSC,
-  scoreLOR,
-  scorePOD,
-  scorePSB,
-  tierTally,
-} from "./performance.ts";
-
-const here = dirname(fileURLToPath(import.meta.url));
-
-// Every boundary of every table, as [input, expected percentage].
-const BANDS = {
-  dcr: [
-    [null, 100], [100, 100], [99.8, 90], [99.7, 80], [99.6, 70], [99.4, 60],
-    [99.19, 50], [98.9, 40], [98.69, 30], [98.5, 20], [98.49, 0],
-  ],
-  dsc: [[null, 100], [0, 100], [499, 75], [500, 50], [799, 50], [800, 0]],
-  lor: [[null, 100], [0, 100], [5, 50], [6, 0]],
-  pod: [
-    [null, 100], [100, 100], [99.7, 90], [99.4, 80], [99, 70], [98.5, 60],
-    [97.5, 50], [96.5, 40], [96.4, 0],
-  ],
-  cc: [
-    [null, 100], [100, 100], [99.5, 90], [99, 80], [98.5, 70], [97.5, 60],
-    [96.5, 50], [95.5, 40], [94.5, 20], [94.4, 0],
-  ],
-  ce: [[null, 100], [0, 100], [1, 0]],
-  cdf: [
-    [null, 100], [499, 100], [500, 90], [800, 80], [1000, 70], [1500, 60],
-    [2000, 50], [2500, 40], [3000, 30], [3500, 20], [4000, 10], [4400, 10], [4401, 0],
-  ],
-  psb: [[null, 100], [0, 100], [1, 50], [3, 50], [4, 0]],
-};
-
-const FUNCTIONS = {
-  dcr: scoreDCR, dsc: scoreDSC, lor: scoreLOR, pod: scorePOD,
-  cc: scoreCC, ce: scoreCE, cdf: scoreCDF, psb: scorePSB,
-};
-
-for (const [name, cases] of Object.entries(BANDS)) {
-  test(`${name} bands are unchanged`, () => {
-    for (const [input, expected] of cases) {
-      assert.equal(
-        FUNCTIONS[name](input),
-        expected,
-        `${name}(${input}) should be ${expected}% of its points`
-      );
-    }
-  });
-}
+import { metricAttainment, tierTally } from "./performance.ts";
 
 // ---------------------------------------------------------------------------
 // The colours
@@ -82,31 +22,57 @@ for (const [name, cases] of Object.entries(BANDS)) {
 
 const WEIGHTS = { dcr: 10, pod: 10, cc: 10, psb: 5, dsc_dpmo: 15, delivered: 0 };
 
-test("blue at 85, yellow at 65, red below", () => {
-  // 99.8 DCR earns 90%, 99.4 earns 60%, and 99.19 earns exactly 50.
-  assert.equal(metricAttainment("dcr", 99.8, WEIGHTS).band, "strong");
-  assert.equal(metricAttainment("dcr", 99.4, WEIGHTS).band, "short");
+/** A row as the screen gets one: values, weights, and the stored breakdown. */
+const row = (scores, values = {}, weights = WEIGHTS) => ({
+  ...{ dcr: 99.5, pod: 99, cc: 98, psb: 1, dsc_dpmo: 400, delivered: 4210 },
+  ...values,
+  weights_used: weights,
+  metric_scores: scores,
+});
 
-  // The cut-offs themselves, which is where an off-by-one would live: 85 and
-  // 65 belong to the band above them.
-  assert.equal(metricAttainment("cdf_dpmo", 500, { cdf_dpmo: 10 }).band, "strong"); // 90
-  assert.equal(metricAttainment("dsc_dpmo", 499, WEIGHTS).band, "watch"); // 75
-  assert.equal(metricAttainment("psb", 1, WEIGHTS).band, "short"); // 50
+test("blue at 85, yellow at 65, red below", () => {
+  assert.equal(metricAttainment("dcr", row({ dcr: 100 })).band, "strong");
+  assert.equal(metricAttainment("dcr", row({ dcr: 90 })).band, "strong");
+  assert.equal(metricAttainment("dcr", row({ dcr: 75 })).band, "watch");
+  assert.equal(metricAttainment("dcr", row({ dcr: 50 })).band, "short");
+  assert.equal(metricAttainment("dcr", row({ dcr: 0 })).band, "short");
+});
+
+test("the cut-offs themselves belong to the band above", () => {
+  // Where an off-by-one would live.
+  assert.equal(metricAttainment("dcr", row({ dcr: 85 })).band, "strong");
+  assert.equal(metricAttainment("dcr", row({ dcr: 84.9 })).band, "watch");
+  assert.equal(metricAttainment("dcr", row({ dcr: 65 })).band, "watch");
+  assert.equal(metricAttainment("dcr", row({ dcr: 64.9 })).band, "short");
+});
+
+test("the percentage is the row's, never worked out here", () => {
+  // A DCR of 99.5 scores 60% under the office's bands. If this app ever starts
+  // computing its own answer again, this is where it shows up: the row says 12
+  // and the tile must say 12.
+  const earned = metricAttainment("dcr", row({ dcr: 12 }, { dcr: 99.5 }));
+  assert.equal(earned.percent, 12);
+  assert.equal(earned.band, "short");
 });
 
 test("nothing is coloured where there is nothing to colour", () => {
-  // Delivered is a volume, not a graded metric.
-  assert.equal(metricAttainment("delivered", 4210, WEIGHTS), null);
+  // Delivered is a volume, and is not in the breakdown at all.
+  assert.equal(metricAttainment("delivered", row({ dcr: 100 })), null);
+
+  // A week imported before the column existed, and never backfilled. Working
+  // one out from bands held in the app is what the column exists to stop.
+  assert.equal(metricAttainment("dcr", row(null)), null);
+  assert.equal(metricAttainment("dcr", { ...row({}), metric_scores: {} }), null);
 
   // A metric carrying no points has no points to earn a share of.
-  assert.equal(metricAttainment("psb", 0, { ...WEIGHTS, psb: 0 }), null);
+  assert.equal(metricAttainment("psb", row({ psb: 100 }, {}, { ...WEIGHTS, psb: 0 })), null);
 
-  // A missing value scores full marks by the office's rule, but "--" wearing
-  // the top colour would read as a result rather than as an absence.
-  assert.equal(metricAttainment("dcr", null, WEIGHTS), null);
+  // A missing value scores full marks by the office's rule and the row says
+  // 100 -- but "--" wearing the top colour reads as a result, not an absence.
+  assert.equal(metricAttainment("dcr", row({ dcr: 100 }, { dcr: null })), null);
 
   // A row that never recorded its weights is not a row where nothing counted.
-  assert.equal(metricAttainment("dcr", 100, null).band, "strong");
+  assert.equal(metricAttainment("dcr", row({ dcr: 100 }, {}, null)).band, "strong");
 });
 
 // ---------------------------------------------------------------------------
@@ -153,43 +119,5 @@ test("the tiers come back best first", () => {
   assert.deepEqual(
     counts.map((c) => c.tier),
     ["Fantastic_Plus", "Fantastic", "Great", "Fair", "Poor"]
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Drift against the portal
-// ---------------------------------------------------------------------------
-
-test("the band tables still match the admin portal", (t) => {
-  const portal = resolve(here, "../../../midrive-v2/lib/performance/scoring.ts");
-
-  if (!existsSync(portal)) {
-    // The two repos are separate, so this only runs where both are checked
-    // out. Skipping is honest; asserting nothing while pretending to check
-    // would not be.
-    t.skip("midrive-v2 is not checked out beside this repo");
-    return;
-  }
-
-  // The two repos disagree about line endings and always have. That is not
-  // drift in the bands.
-  const table = (source) =>
-    source
-      .split(String.fromCharCode(13) + String.fromCharCode(10))
-      .join(String.fromCharCode(10))
-      .match(
-        /export function score(?:DCR|DSC|LOR|POD|CC|CE|CDF|PSB)\([\s\S]*?\n}/g
-      )
-      ?.join(String.fromCharCode(10)) ?? "";
-
-  const theirs = table(readFileSync(portal, "utf8"));
-  const ours = table(readFileSync(resolve(here, "performance.ts"), "utf8"));
-
-  assert.notEqual(theirs, "", "could not find the portal's score functions");
-  assert.equal(
-    ours,
-    theirs,
-    "The office's per-metric bands have moved and the phone still has the old ones. " +
-      "Re-copy them, or better, put the earned percentage on the row at import."
   );
 });

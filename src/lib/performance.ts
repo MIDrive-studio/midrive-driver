@@ -266,145 +266,63 @@ export function tierTally(rows: ScoredWeek[], year: number): { counts: TierCount
 // ---------------------------------------------------------------------------
 //
 // A tile shows a number and no sense of whether it is a good one. "Good" here
-// is not this app's opinion: every metric is banded by the office, and those
-// bands are what build the total score in the first place -- a metric earns a
-// percentage of the points it is worth, and the weighted sum of those is the
-// score on the card above.
+// is not this app's opinion and is not this app's arithmetic either: every
+// metric earns a percentage of the points it is worth, the weighted sum of
+// those is the score on the card above, and the office decides the bands.
 //
-// So the colour is that percentage, and nothing else.
+// That percentage is read off the row. It is not computed here, and the bands
+// are deliberately nowhere in this app.
 //
-// WHERE THESE BANDS COME FROM, AND THE RISK IN THAT
+// This used to be a copy of the portal's band tables, and the copy was the
+// problem. Not only because two copies of a business rule drift -- because
+// this one ships through EAS. Retune a band in the office and every driver
+// still on last month's build would go on grading themselves by last month's
+// rules until they happened to update. A shared package would not have fixed
+// that; only the answer travelling with the row does.
 //
-// They are the admin portal's, copied out of lib/performance/scoring.ts by
-// script rather than by hand. They are not on the row: the row carries
-// weights_used and thresholds_used, so the app never has to guess what a week
-// was judged against, but the per-metric bands were never written down beside
-// them. That makes this the second copy of a business rule, which is the exact
-// thing thresholds_used exists to prevent -- retune a band in the office and
-// these colours drift out of agreement silently.
-//
-// The durable fix is one column: the earned percentage written onto the row at
-// import, next to the weights and thresholds already frozen there. Until that
-// exists, test:attainment locks these tables so a change to them is at least a
-// deliberate one.
+// So metric_scores joined weights_used and thresholds_used on the row, written
+// at import. See migration 20260910000004.
 
-export function scoreDCR(v: number | null): number {
-  if (v == null) return 100;
-  if (v >= 100) return 100;
-  if (v >= 99.8) return 90;
-  if (v >= 99.7) return 80;
-  if (v >= 99.6) return 70;
-  if (v >= 99.4) return 60;
-  if (v >= 99.19) return 50;
-  if (v >= 98.9) return 40;
-  if (v >= 98.69) return 30;
-  if (v >= 98.5) return 20;
-  return 0;
-}
-export function scoreDSC(v: number | null): number {
-  if (v == null) return 100;
-  if (v === 0) return 100;
-  if (v < 500) return 75;
-  if (v < 800) return 50;
-  return 0;
-}
-export function scoreLOR(v: number | null): number {
-  if (v == null) return 100;
-  if (v === 0) return 100;
-  if (v <= 5) return 50;
-  return 0;
-}
-export function scorePOD(v: number | null): number {
-  if (v == null) return 100;
-  if (v >= 100) return 100;
-  if (v >= 99.7) return 90;
-  if (v >= 99.4) return 80;
-  if (v >= 99.0) return 70;
-  if (v >= 98.5) return 60;
-  if (v >= 97.5) return 50;
-  if (v >= 96.5) return 40;
-  return 0;
-}
-export function scoreCC(v: number | null): number {
-  if (v == null) return 100;
-  if (v >= 100) return 100;
-  if (v >= 99.5) return 90;
-  if (v >= 99) return 80;
-  if (v >= 98.5) return 70;
-  if (v >= 97.5) return 60;
-  if (v >= 96.5) return 50;
-  if (v >= 95.5) return 40;
-  if (v >= 94.5) return 20;
-  return 0;
-}
-export function scoreCE(v: number | null): number {
-  return v == null || v === 0 ? 100 : 0;
-}
-export function scoreCDF(v: number | null): number {
-  if (v == null) return 100;
-  if (v < 500) return 100;
-  if (v < 800) return 90;
-  if (v < 1000) return 80;
-  if (v < 1500) return 70;
-  if (v < 2000) return 60;
-  if (v < 2500) return 50;
-  if (v < 3000) return 40;
-  if (v < 3500) return 30;
-  if (v < 4000) return 20;
-  if (v <= 4400) return 10;
-  return 0;
-}
-export function scorePSB(v: number | null): number {
-  if (v == null || v === 0) return 100;
-  if (v >= 1 && v <= 3) return 50;
-  return 0;
-}
-
-/** The band table for each metric. Delivered is absent: see below. */
-const SCORE_BANDS: Partial<Record<MetricKey, (v: number | null) => number>> = {
-  dcr: scoreDCR,
-  dsc_dpmo: scoreDSC,
-  lor_dpmo: scoreLOR,
-  pod: scorePOD,
-  cc: scoreCC,
-  ce: scoreCE,
-  cdf_dpmo: scoreCDF,
-  psb: scorePSB,
-};
-
-/** Blue, yellow, red -- the office's own cut-offs, at 85 and 65. */
 export type Attainment = { percent: number; band: "strong" | "watch" | "short" };
 
+/** Blue, yellow, red -- the office's own cut-offs. */
 const STRONG_AT = 85;
 const WATCH_AT = 65;
+
+/** As much of a row as this needs to see. */
+type ScoredRow = {
+  metric_scores?: Record<string, number> | null;
+  weights_used?: Record<string, number> | null;
+} & Partial<Record<MetricKey, number | null>>;
 
 /**
  * The share of a metric's points the week earned, and which band that lands in.
  *
- * Null where there is nothing to colour, which is three different things and
+ * Null where there is nothing to colour, which is four different things and
  * all of them mean "say nothing" rather than "say zero":
  *
- *  - Delivered has no band table. It is a volume, and volume belongs to the
- *    route rather than the driver -- a light week is not a bad week. It also
- *    carries no points by default, so there is nothing to earn a share of.
+ *  - Delivered is not in the breakdown. It is a volume, and volume belongs to
+ *    the route rather than to the driver -- a light week is not a bad week. It
+ *    also carries no points by default, so there is nothing to earn a share of.
+ *  - A week imported before metric_scores existed and never backfilled has no
+ *    breakdown. Working one out here from bands held in the app is exactly
+ *    what this column was added to stop.
  *  - A metric weighted at zero has no points available. A percentage of
  *    nothing is not a number, and the metric cannot move the score either way.
- *  - A missing value scores full marks by the office's rule, but "--" wearing
- *    the top colour reads as a result rather than as an absence.
+ *  - A missing value scores full marks by the office's rule, and the row says
+ *    100 -- but "--" wearing the top colour reads as a result rather than as
+ *    an absence.
  */
-export function metricAttainment(
-  key: MetricKey,
-  value: number | null | undefined,
-  weights: Record<string, number> | null | undefined
-): Attainment | null {
-  const band = SCORE_BANDS[key];
-  if (!band || value == null) return null;
+export function metricAttainment(key: MetricKey, row: ScoredRow | null | undefined): Attainment | null {
+  const percent = row?.metric_scores?.[key];
+  if (typeof percent !== "number") return null;
+
+  if (row?.[key] == null) return null;
 
   // Only skip on a weight explicitly recorded as zero. A row that never
   // recorded its weights is not a row where nothing counted.
-  if (weightOf(weights, key) === 0) return null;
+  if (weightOf(row?.weights_used, key) === 0) return null;
 
-  const percent = band(value);
   return {
     percent,
     band: percent >= STRONG_AT ? "strong" : percent >= WATCH_AT ? "watch" : "short",

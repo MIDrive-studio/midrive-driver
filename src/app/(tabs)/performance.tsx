@@ -166,7 +166,7 @@ export default function PerformanceScreen() {
     const out: Partial<Record<MetricKey, Attainment | null>> = {};
     if (current) {
       for (const spec of DRIVER_METRICS) {
-        out[spec.key] = metricAttainment(spec.key, current[spec.key] as number | null, current.weights_used);
+        out[spec.key] = metricAttainment(spec.key, current);
       }
     }
     return out;
