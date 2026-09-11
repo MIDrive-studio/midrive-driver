@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { DocumentBlocks, type Block } from "@/components/document-blocks";
+import { DocumentPages } from "@/components/document-pages";
 import { SignaturePad } from "@/components/signature-pad";
 import { FollowUpForm, isShown, type FollowUp } from "@/components/follow-up-form";
 import { documentAction, readDocument, type DocumentContent } from "@/lib/portal-api";
@@ -97,6 +98,10 @@ export default function SignStep() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // A contract supplied as a PDF. It has no blocks and therefore no
+  // questions -- nothing in a file somebody sent us can ask one.
+  const isPdf = Boolean(doc?.pages);
 
   const questions: Question[] = (doc?.blocks ?? [])
     .filter((b) => b.type === "question")
@@ -338,8 +343,11 @@ export default function SignStep() {
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
         >
+          {isPdf ? (
+            <DocumentPages pages={doc.pages ?? []} signatureField={doc.signature_field} />
+          ) : (
           <DocumentBlocks
-            blocks={doc.blocks as Block[]}
+            blocks={(doc.blocks ?? []) as Block[]}
             // The question is answered where the document asks it. Everything
             // needed to answer is already in scope here, so the document keeps
             // its own order and the driver is asked once.
@@ -394,6 +402,7 @@ export default function SignStep() {
               );
             }}
           />
+          )}
 
           {/* The gate. Unchanged in what it demands -- the whole document has
               to have been shown -- only in what it looks like: there is no

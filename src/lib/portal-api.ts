@@ -150,7 +150,19 @@ export type DocumentContent = {
   version: number;
   requires_signature: boolean;
   declaration: string | null;
-  blocks: { type: string; [key: string]: unknown }[];
+  blocks: { type: string; [key: string]: unknown }[] | null;
+
+  /**
+   * A contract the company supplied, as pictures of its pages.
+   *
+   * Null for every document this app renders from blocks, which is nearly all
+   * of them. When these are present, blocks is null: the two are alternatives
+   * rather than a document with both, and the screen switches on it.
+   */
+  pages: string[] | null;
+
+  /** Where the signature will be stamped. Drawn, never editable. */
+  signature_field: { page: number; x: number; y: number; width: number; height: number } | null;
 };
 
 export async function listDocuments() {
