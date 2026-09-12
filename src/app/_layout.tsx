@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { whereToSend } from "@/lib/where-to-send";
+import { OutstandingDocumentsProvider, useOutstandingDocuments } from "@/lib/outstanding-documents";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -18,11 +19,22 @@ function RootNavigator() {
   const [splashHidden, setSplashHidden] = useState(false);
   const lastSent = useRef<string | null>(null);
 
+  // Checked at app-open only -- see outstanding-documents.ts. `loading` here
+  // is its own initial fetch, not this hook's; a driver must not be sent to
+  // the tabs for a heartbeat before this has had a chance to answer, so
+  // whereToSend() is not consulted at all until both are ready (below).
+  const outstandingDocuments = useOutstandingDocuments();
+
   const topSegment = segments[0] as string | undefined;
   const statusBarStyle = topSegment === "login" ? "light" : "dark";
 
   useEffect(() => {
     if (loading) return;
+    // Waited for once, on the first check, same as `loading` above. Without
+    // this a driver with a document outstanding would see the tabs for one
+    // frame before being pulled back to the gate -- not wrong for long, but a
+    // flash of the wrong screen is still the wrong screen.
+    if (outstandingDocuments.loading) return;
 
     if (!splashHidden) {
       SplashScreen.hideAsync().catch(() => {});
@@ -30,13 +42,15 @@ function RootNavigator() {
     }
 
     // One function decides this, and it is tested against every combination
-    // of status, profile_status and screen -- see test:routing in the admin
-    // repo. Two rules written separately deadlocked here once already.
+    // of status, profile_status, screen and outstanding-document state -- see
+    // test:where-to-send. Two rules written separately deadlocked here once
+    // already.
     const send = whereToSend({
       isSignedIn,
       status: driver?.status ?? null,
       profileStatus: driver?.profile_status ?? null,
       segment: topSegment,
+      hasOutstandingDocuments: outstandingDocuments.count > 0,
     });
 
     // Settled: stay put, and forget where we were sent so a later move to the
@@ -65,7 +79,7 @@ function RootNavigator() {
 
     lastSent.current = send;
     router.replace(send as Parameters<typeof router.replace>[0]);
-  }, [loading, isSignedIn, driver, topSegment, router, splashHidden]);
+  }, [loading, isSignedIn, driver, topSegment, router, splashHidden, outstandingDocuments.loading, outstandingDocuments.count]);
 
   if (loading) {
     return (
@@ -131,6 +145,9 @@ function RootNavigator() {
         <Stack.Screen name="login" options={{ gestureEnabled: false }} />
         <Stack.Screen name="complete-profile" options={{ gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+        {/* No swipe-back: a document that has become required is required,
+            not a screen to dismiss. Signing it is what leaves this screen. */}
+        <Stack.Screen name="documents-gate" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="accident" options={{ presentation: "modal" }} />
         {/* Full screen rather than a modal: the camera fills the display and a
@@ -155,7 +172,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <RootNavigator />
+          {/* One shared instance, not one per screen -- see
+              outstanding-documents.tsx for why the gate screen and this
+              layout's own redirect effect must never each hold a different
+              answer to "is anything still outstanding". */}
+          <OutstandingDocumentsProvider>
+            <RootNavigator />
+          </OutstandingDocumentsProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

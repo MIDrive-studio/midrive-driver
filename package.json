@@ -54,7 +54,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test:attainment": "node --test src/lib/performance.test.mjs"
+    "test:attainment": "node --test src/lib/performance.test.mjs",
+    "test:where-to-send": "node --test src/lib/where-to-send.test.mjs"
   },
   "private": true
 }

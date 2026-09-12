@@ -19,11 +19,23 @@ export type Where = {
   profileStatus: "pending" | "completed" | null;
   /** The first path segment, or undefined at "/". */
   segment: string | undefined;
+  /**
+   * A document has become required since onboarding finished -- issued by
+   * hand, or a version rolled out to existing drivers as well as new ones.
+   *
+   * Checked only at app-open (see useOutstandingDocuments), never mid-session,
+   * so signing something new never interrupts a driver already partway
+   * through a delivery. Ignored entirely while status is 'onboarding': that
+   * driver is already blocked by the onboarding checklist itself, which owns
+   * its own documents, and a second gate on top would just be confusing about
+   * which one is stopping them.
+   */
+  hasOutstandingDocuments: boolean;
 };
 
 /** The route to replace with, or null to stay put. */
 export function whereToSend(where: Where): string | null {
-  const { isSignedIn, status, profileStatus, segment } = where;
+  const { isSignedIn, status, profileStatus, segment, hasOutstandingDocuments } = where;
 
   if (!isSignedIn) return segment === "login" ? null : "/login";
 
@@ -47,6 +59,15 @@ export function whereToSend(where: Where): string | null {
   // measures the actual fields instead, which is why a driver may walk into
   // complete-profile of their own accord and must not be thrown out of it.
   if (profileStatus === "pending") return segment === "complete-profile" ? null : "/complete-profile";
+
+  // A document became outstanding after onboarding -- a new version rolled
+  // out to existing drivers as well as new ones, or one issued to this driver
+  // by name. Comes after the profile checks (a driver with no profile yet has
+  // a more basic gap to close first) and before the tabs redirect, so it wins
+  // over "go to tabs" but never over "finish your profile".
+  if (hasOutstandingDocuments) return segment === "documents-gate" ? null : "/documents-gate";
+
+  if (segment === "documents-gate") return "/(tabs)/home";
 
   if (profileStatus === "completed" && (segment === "login" || segment === undefined)) return "/(tabs)/home";
 
