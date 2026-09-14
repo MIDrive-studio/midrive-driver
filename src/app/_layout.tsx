@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { whereToSend } from "@/lib/where-to-send";
 import { OutstandingDocumentsProvider, useOutstandingDocuments } from "@/lib/outstanding-documents";
+import { registerForPushNotificationsAsync } from "@/lib/push-notifications";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -80,6 +82,29 @@ function RootNavigator() {
     lastSent.current = send;
     router.replace(send as Parameters<typeof router.replace>[0]);
   }, [loading, isSignedIn, driver, topSegment, router, splashHidden, outstandingDocuments.loading, outstandingDocuments.count]);
+
+  // One registration per signed-in driver, not per screen -- see
+  // push-notifications.ts for why this never blocks or errors visibly.
+  useEffect(() => {
+    if (!driver) return;
+    void registerForPushNotificationsAsync(driver.id);
+  }, [driver]);
+
+  // Tapping a push takes a driver to Home, where the Tomorrow card reads the
+  // latest assignment fresh rather than trusting whatever the notification
+  // itself said -- see useTomorrowAssignment. Covers both a tap that arrives
+  // while the app is already running and one that cold-starts it.
+  useEffect(() => {
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) router.replace("/(tabs)/home");
+    });
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(() => {
+      router.replace("/(tabs)/home");
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   if (loading) {
     return (

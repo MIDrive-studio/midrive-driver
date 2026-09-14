@@ -7,17 +7,20 @@ import { ShiftCard } from "@/components/shift-card";
 import { NavTile } from "@/components/nav-tile";
 import { HomeAvailabilityTile } from "@/components/home-availability-tile";
 import { AccidentReportTile } from "@/components/accident-report-tile";
-import { TodayCard } from "@/components/today-card";
+import { TomorrowCard } from "@/components/tomorrow-card";
 import { VehicleCheckTile } from "@/components/vehicle-check-tile";
 
 // A driver opens this in a yard, on a phone, usually in a hurry, to find out
 // what they are doing. So today's job comes first and everything else follows.
 //
-// Two things were wrong before, and both were about emphasis rather than
-// content. There was no today block at all -- route, van and depot were all in
-// the database and reachable from here, and the screen simply never showed
-// them. And the only coloured control on the screen was Sign out, top right,
+// The only coloured control on the screen used to be Sign out, top right,
 // which made logging out the most prominent thing a driver could press.
+//
+// The block below the vehicle check used to answer "what am I doing today" --
+// it now answers "what is tomorrow", which is the question this screen cannot
+// otherwise answer for a driver deciding tonight whether they are in. See
+// tomorrow-card.tsx for why today's own assignment deliberately has no home
+// here any more.
 
 export default function HomeScreen() {
   const { driver, signOut } = useAuth();
@@ -52,7 +55,7 @@ export default function HomeScreen() {
 
         <VehicleCheckTile />
 
-        <TodayCard driverId={driver.id} />
+        <TomorrowCard />
 
         <ProfileCompletionCard driver={driver} />
 

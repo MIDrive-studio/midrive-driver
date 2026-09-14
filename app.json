@@ -43,7 +43,8 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -85,7 +86,14 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#1f5089"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
