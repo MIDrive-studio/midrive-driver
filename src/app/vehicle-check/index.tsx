@@ -320,6 +320,15 @@ export default function VehicleCheckStart() {
                   {[context.colour, context.make, context.model].filter(Boolean).join(" ") || "Panel van"}
                 </Text>
 
+                {(context.open_safety_defect_count ?? 0) > 0 && (
+                  <View className="mt-3 flex-row items-start gap-2 rounded-lg border border-bad-line bg-bad-surface px-3 py-2.5">
+                    <Feather name="alert-triangle" size={16} color="#b91c1c" style={{ marginTop: 2 }} />
+                    <Text className="flex-1 text-sm font-semibold leading-5 text-bad-strong">
+                      Safety defect identified on this vehicle. Please speak to your manager before using this vehicle.
+                    </Text>
+                  </View>
+                )}
+
                 {isSwap && (
                   <View className="mt-3 flex-row items-start gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2">
                     <Feather name="repeat" size={14} color="#b45309" style={{ marginTop: 2 }} />

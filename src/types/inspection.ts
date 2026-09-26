@@ -70,6 +70,7 @@ export type VehicleCheckContext = {
   colour: string | null;
   mileage: number | null;
   open_damage_count: number;
+  open_safety_defect_count: number;
   last_inspection: {
     id: string;
     date: string;
