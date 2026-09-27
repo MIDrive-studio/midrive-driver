@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { ScoreTrend } from "@/components/score-trend";
+import { performanceTips, type PerformanceTips } from "@/lib/portal-api";
 import {
   DRIVER_METRICS,
   TIER_LABEL,
@@ -559,9 +560,11 @@ function MovementLine({ moved, delta }: { moved: Direction; delta: number | null
  * driver's own number, last week's, and what the metric was worth in the score
  * for that week.
  *
- * There is deliberately no coaching copy here. What good looks like, and how to
- * improve it, are the office's words to write rather than this app's to invent;
- * a plausible-sounding target made up by software is worse than none at all.
+ * There is deliberately no coaching copy written into this app. How to improve
+ * a metric is the office's to say, so the tips below come from the documents the
+ * office uploaded to its knowledge base (via the portal), and the section is
+ * simply absent when nothing has been uploaded about that metric -- a
+ * plausible-sounding tip made up by software is worse than none at all.
  */
 function MetricDetail({
   spec,
@@ -576,6 +579,25 @@ function MetricDetail({
   earned: Attainment | null;
   onClose: () => void;
 }) {
+  const [tips, setTips] = useState<PerformanceTips | null>(null);
+  const [tipsLoading, setTipsLoading] = useState(false);
+  const metricKey = spec?.key;
+
+  useEffect(() => {
+    if (!metricKey) return;
+    let live = true;
+    setTips(null);
+    setTipsLoading(true);
+    performanceTips(metricKey).then((result) => {
+      if (!live) return;
+      setTips(result.ok ? result.value : null);
+      setTipsLoading(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [metricKey]);
+
   if (!spec || !week) return null;
 
   const now = week[spec.key] as number | null;
@@ -629,6 +651,30 @@ function MetricDetail({
               {weight === 0 && (
                 <Text className="mt-1 text-xs text-slate-500">
                   It is recorded but carries no points, so it does not move your total.
+                </Text>
+              )}
+            </View>
+          )}
+
+          {tipsLoading && (
+            <View className="mt-4 flex-row items-center gap-2">
+              <ActivityIndicator size="small" color="#64748b" />
+              <Text className="text-xs text-slate-500">Finding tips…</Text>
+            </View>
+          )}
+
+          {!tipsLoading && tips && tips.tips.length > 0 && (
+            <View className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <Text className="text-sm font-bold text-blue-900">How to improve</Text>
+              {tips.tips.map((tip, index) => (
+                <View key={`${index}-${tip}`} className="mt-2 flex-row gap-2">
+                  <Text className="text-sm font-bold text-blue-700">{index + 1}.</Text>
+                  <Text className="flex-1 text-sm leading-5 text-slate-800">{tip}</Text>
+                </View>
+              ))}
+              {tips.sources.length > 0 && (
+                <Text className="mt-3 text-xs text-slate-500">
+                  From {[...new Set(tips.sources.map((s) => s.document))].join(", ")}
                 </Text>
               )}
             </View>

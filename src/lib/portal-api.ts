@@ -107,6 +107,20 @@ export async function portalPost<T>(path: string, body: unknown): Promise<Portal
   }
 }
 
+// Tips for one performance metric, written by the portal from the company's
+// own uploaded knowledge base. An empty list is an ordinary answer -- nothing
+// has been uploaded about that metric -- and the screen then shows no section
+// at all rather than inventing advice.
+export type PerformanceTips = {
+  tips: string[];
+  sources: { document: string; page: number }[];
+  unavailable?: boolean;
+};
+
+export async function performanceTips(metric: string) {
+  return portalGet<PerformanceTips>(`/api/driver/performance-tips?metric=${encodeURIComponent(metric)}`);
+}
+
 export type Reading = {
   document_number: string | null;
   expires_on: string | null;
