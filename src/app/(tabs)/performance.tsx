@@ -78,6 +78,8 @@ export default function PerformanceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [weeks, setWeeks] = useState<PerformanceWeeklyDriver[]>([]);
+  const [siteNames, setSiteNames] = useState<Record<string, string>>({});
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [bonus, setBonus] = useState<{ earned: number; gross: number } | null>(null);
   const [openMetric, setOpenMetric] = useState<MetricSpec | null>(null);
 
@@ -85,7 +87,7 @@ export default function PerformanceScreen() {
     if (!driver) return;
     setLoadError(null);
 
-    const [scores, pay] = await Promise.all([
+    const [scores, pay, sites] = await Promise.all([
       supabase
         .from("performance_weekly_driver")
         .select("*")
@@ -99,6 +101,9 @@ export default function PerformanceScreen() {
         .from("payroll_weekly_driver")
         .select("additional_amount, gross_pay")
         .eq("driver_id", driver.id),
+      // Only ever needed to label a week that has a row at more than one
+      // site -- the overwhelmingly common case never reads this map at all.
+      supabase.from("sites").select("id, name").eq("company_id", driver.company_id),
     ]);
 
     if (scores.error) {
@@ -109,6 +114,12 @@ export default function PerformanceScreen() {
     }
 
     setWeeks((scores.data as PerformanceWeeklyDriver[]) ?? []);
+
+    if (!sites.error) {
+      const map: Record<string, string> = {};
+      for (const s of sites.data ?? []) map[s.id as string] = s.name as string;
+      setSiteNames(map);
+    }
 
     // A failed pay read is not worth losing the whole screen over. The bonus
     // card just does not appear, which is also what happens when there is no
@@ -129,8 +140,74 @@ export default function PerformanceScreen() {
     load();
   }, [load]);
 
-  const current = weeks[0];
-  const previous = weeks[1];
+  // Almost every driver has exactly one row per week, forever -- the id
+  // alone identifies the week and nothing below needs to know site exists.
+  // The exception is a week where the driver worked two sites and got two
+  // scorecards: that week's own group has more than one row, and the chips
+  // let the driver choose which one "counts" as the week's number below.
+  // weeks is already ordered newest-first by the query, and Map preserves
+  // insertion order, so this grouping doesn't need its own sort.
+  const weekGroups = useMemo(() => {
+    const groups = new Map<string, PerformanceWeeklyDriver[]>();
+    for (const w of weeks) {
+      const key = `${w.year}-${w.week_number}`;
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(w);
+      else groups.set(key, [w]);
+    }
+    return groups;
+  }, [weeks]);
+
+  const latestGroup = useMemo(() => weekGroups.values().next().value ?? [], [weekGroups]);
+
+  const siteOptions = useMemo(
+    () =>
+      [...new Set(latestGroup.map((w) => w.site_id))].sort((a, b) =>
+        (siteNames[a] ?? "").localeCompare(siteNames[b] ?? "")
+      ),
+    [latestGroup, siteNames]
+  );
+
+  // The default whenever nothing has been explicitly tapped: the driver's
+  // own site when this week's cards include it, otherwise the first
+  // alphabetically. A plain derived value rather than state synced from an
+  // effect -- selectedSiteId itself stays null until a chip is actually
+  // pressed, so there is never a stale choice to reconcile when a new
+  // week's own options differ from the last one's.
+  const defaultSiteId = useMemo(() => {
+    if (siteOptions.length === 0) return null;
+    if (driver?.site_id && siteOptions.includes(driver.site_id)) return driver.site_id;
+    return siteOptions[0];
+  }, [siteOptions, driver]);
+
+  const effectiveSiteId = selectedSiteId && siteOptions.includes(selectedSiteId) ? selectedSiteId : defaultSiteId;
+
+  // One row per week, for every week -- a week with only one row passes
+  // through untouched (the whole history, unaffected, for a driver who has
+  // never had an overlap); a week with two is resolved to whichever site is
+  // currently selected, falling back deterministically when that week isn't
+  // the one the chips are even showing. This is deliberately not "filter
+  // every row down to one site": that would also cut a driver's *older*
+  // weeks at a site they've since permanently left out of their own year
+  // and trend, which is a different driver than the one this screen exists
+  // for.
+  const resolvedWeeks = useMemo(() => {
+    const out: PerformanceWeeklyDriver[] = [];
+    for (const rows of weekGroups.values()) {
+      if (rows.length === 1) {
+        out.push(rows[0]);
+        continue;
+      }
+      const match = rows.find((r) => r.site_id === effectiveSiteId);
+      out.push(
+        match ?? [...rows].sort((a, b) => (siteNames[a.site_id] ?? "").localeCompare(siteNames[b.site_id] ?? ""))[0]
+      );
+    }
+    return out;
+  }, [weekGroups, effectiveSiteId, siteNames]);
+
+  const current = resolvedWeeks[0];
+  const previous = resolvedWeeks[1];
 
   const thresholds = current?.thresholds_used ?? null;
   const tier = tierFor(current?.total_score ?? null, thresholds);
@@ -141,7 +218,7 @@ export default function PerformanceScreen() {
   // Rank and the trend line still speak for the recent run rather than for the
   // whole fetch: "average rank across 84 weeks" is a different claim from the
   // one this card has always made, and not one a driver asked for.
-  const recent = useMemo(() => weeks.slice(0, RANK_WINDOW), [weeks]);
+  const recent = useMemo(() => resolvedWeeks.slice(0, RANK_WINDOW), [resolvedWeeks]);
 
   const avgRank = useMemo(() => averageRank(recent.map((w) => w.weekly_rank)), [recent]);
   const rankedWeeks = recent.filter((w) => w.weekly_rank != null).length;
@@ -161,7 +238,7 @@ export default function PerformanceScreen() {
   // The year the latest row belongs to, rather than the calendar year -- a
   // driver opening this in January wants the year they have rows for, not an
   // empty card headed with today's date.
-  const year = useMemo(() => (current ? tierTally(weeks, current.year) : null), [weeks, current]);
+  const year = useMemo(() => (current ? tierTally(resolvedWeeks, current.year) : null), [resolvedWeeks, current]);
 
   const attainment = useMemo(() => {
     const out: Partial<Record<MetricKey, Attainment | null>> = {};
@@ -209,6 +286,29 @@ export default function PerformanceScreen() {
           </View>
         ) : (
           <>
+            {/* Only ever appears for the rare week with a card at each site --
+                every other week, this row simply isn't rendered. */}
+            {siteOptions.length > 1 && (
+              <View className="mb-3 flex-row gap-2">
+                {siteOptions.map((siteId) => {
+                  const selected = siteId === effectiveSiteId;
+                  return (
+                    <Pressable
+                      key={siteId}
+                      onPress={() => setSelectedSiteId(siteId)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Show ${siteNames[siteId] ?? "this site"}'s scorecard`}
+                      className={`rounded-full border px-3 py-1.5 ${selected ? "border-slate-900 bg-slate-900" : "border-slate-200 bg-white"}`}
+                    >
+                      <Text className={`text-xs font-semibold ${selected ? "text-white" : "text-slate-600"}`}>
+                        {siteNames[siteId] ?? "Unknown site"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {/* -------------------------------------------------------- */}
             {/* The week itself                                          */}
             {/* -------------------------------------------------------- */}

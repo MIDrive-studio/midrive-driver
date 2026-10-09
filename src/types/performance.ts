@@ -3,6 +3,9 @@ import type { Thresholds } from "@/lib/performance";
 export type PerformanceWeeklyDriver = {
   id: string;
   driver_id: string | null;
+  /** Which site's scorecard this row came from -- a driver who worked two
+   *  sites in the same week has one row per site, not one row per week. */
+  site_id: string;
   year: number;
   week_number: number;
 
