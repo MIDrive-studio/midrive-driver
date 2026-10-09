@@ -37,7 +37,10 @@ export type Where = {
 export function whereToSend(where: Where): string | null {
   const { isSignedIn, status, profileStatus, segment, hasOutstandingDocuments } = where;
 
-  if (!isSignedIn) return segment === "login" ? null : "/login";
+  // forgot-password is reachable precisely because nobody signed in can be
+  // sitting on it on purpose -- it exists for the moment before sign-in, not
+  // after, so it gets the same exemption login itself has.
+  if (!isSignedIn) return segment === "login" || segment === "forgot-password" ? null : "/login";
 
   // No driver record yet. The layout shows its own message for this; sending
   // them anywhere would be guessing.

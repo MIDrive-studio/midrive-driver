@@ -13,7 +13,7 @@ import { whereToSend } from "./where-to-send.ts";
 
 const STATUSES = [null, "onboarding", "active", "offboarded"];
 const PROFILE_STATUSES = [null, "pending", "completed"];
-const SEGMENTS = [undefined, "login", "onboarding", "complete-profile", "documents-gate", "(tabs)", "accident"];
+const SEGMENTS = [undefined, "login", "forgot-password", "onboarding", "complete-profile", "documents-gate", "(tabs)", "accident"];
 const BOOLS = [false, true];
 
 const MAX_HOPS = 10;
@@ -62,12 +62,12 @@ test("every combination reaches a fixed point within a few hops", () => {
   assert.ok(checked > 0, "the combination loop ran");
 });
 
-test("signed out always ends at login", () => {
+test("signed out always ends at login, except forgot-password which is left alone", () => {
   for (const status of STATUSES) {
     for (const profileStatus of PROFILE_STATUSES) {
       for (const segment of SEGMENTS) {
         const result = settle({ isSignedIn: false, status, profileStatus, segment, hasOutstandingDocuments: false });
-        assert.equal(result.at, "login");
+        assert.equal(result.at, segment === "forgot-password" ? "forgot-password" : "login");
       }
     }
   }

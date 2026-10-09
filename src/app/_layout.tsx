@@ -168,6 +168,7 @@ function RootNavigator() {
       <StatusBar style={statusBarStyle} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="forgot-password" options={{ gestureEnabled: false }} />
         <Stack.Screen name="complete-profile" options={{ gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
         {/* No swipe-back: a document that has become required is required,

@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -89,6 +91,10 @@ export default function LoginScreen() {
                 <Feather name={showPassword ? "eye-off" : "eye"} size={18} color="#94a3b8" />
               </Pressable>
             </View>
+
+            <Pressable onPress={() => router.push("/forgot-password")} hitSlop={8} className="mb-6 self-end">
+              <Text className="text-sm font-medium text-slate-500">Forgot password?</Text>
+            </Pressable>
 
             <Pressable
               onPress={handleSignIn}
