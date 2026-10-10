@@ -13,6 +13,14 @@ export type PerformanceWeeklyDriver = {
   rating_tier: string | null;
   weekly_rank: number | null;
 
+  // Which vendor actually covered this driver's van this week, read from
+  // the rota -- never a toggle. The Mentor Score tile only ever appears for
+  // "mentor"; everything else means nothing was reliably attributable, so
+  // it stays hidden rather than showing a false zero.
+  performance_source: "netradyne" | "mentor" | "mixed" | "unknown" | null;
+  mentor_avg_fico: number | null;
+  mentor_days_scored: number | null;
+
   // The metrics behind the score. Every one of these was already being fetched
   // by the screen and thrown away: it showed the total and nothing that made it.
   delivered: number | null;

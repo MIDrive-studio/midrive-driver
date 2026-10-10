@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { ScoreTrend } from "@/components/score-trend";
-import { performanceCoaching, type PerformanceCoaching, type CoachingTip } from "@/lib/portal-api";
+import { performanceCoaching, type PerformanceCoaching, type CoachingTip, mentorScore, type MentorScore, type MentorDay } from "@/lib/portal-api";
 import {
   DRIVER_METRICS,
   TIER_LABEL,
@@ -82,6 +82,7 @@ export default function PerformanceScreen() {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [bonus, setBonus] = useState<{ earned: number; gross: number } | null>(null);
   const [openMetric, setOpenMetric] = useState<MetricSpec | null>(null);
+  const [mentorDetailOpen, setMentorDetailOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!driver) return;
@@ -496,6 +497,24 @@ export default function PerformanceScreen() {
               </View>
             )}
 
+            {/* Only appears when this week's safety data actually came from
+                Mentor -- never shown for a Netradyne/mixed/unknown week, and
+                never a false zero when nothing was attributable. */}
+            {current.performance_source === "mentor" && (
+              <Pressable
+                onPress={() => setMentorDetailOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Mentor score, ${current.mentor_avg_fico ?? "not available"}`}
+                className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 active:bg-indigo-100"
+              >
+                <Text className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Mentor Score</Text>
+                <Text className="mt-1 text-3xl font-bold text-indigo-900">{current.mentor_avg_fico ?? "--"}</Text>
+                <Text className="mt-1 text-xs text-indigo-700">
+                  Average of {current.mentor_days_scored ?? 0} day{current.mentor_days_scored === 1 ? "" : "s"} this week · tap for details
+                </Text>
+              </Pressable>
+            )}
+
             {/* -------------------------------------------------------- */}
             {/* The numbers the score is made of                         */}
             {/* -------------------------------------------------------- */}
@@ -635,6 +654,8 @@ export default function PerformanceScreen() {
         earned={openMetric ? (attainment[openMetric.key] ?? null) : null}
         onClose={() => setOpenMetric(null)}
       />
+
+      <MentorDetail open={mentorDetailOpen} week={current} onClose={() => setMentorDetailOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -801,6 +822,90 @@ function MetricDetail({
             <View className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <Text className="text-xs text-slate-500">Coaching for this week is being prepared. Check back soon.</Text>
             </View>
+          )}
+
+          <Pressable onPress={onClose} className="mt-5 items-center rounded-xl bg-slate-900 py-3">
+            <Text className="text-sm font-semibold text-white">Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/**
+ * The daily breakdown behind a Mentor score -- plain stored fact, fetched
+ * on open rather than carried in `current` (the week row only has the
+ * average), no AI involved anywhere in this one.
+ */
+function MentorDetail({ open, week, onClose }: { open: boolean; week: PerformanceWeeklyDriver | undefined; onClose: () => void }) {
+  const [result, setResult] = useState<MentorScore | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !week) return;
+    let live = true;
+    // Reset-then-fetch on open, same shape as MetricDetail's own coaching
+    // effect just above -- a standard fetch-on-dependency-change effect, not
+    // the derived-state pattern this rule exists to catch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResult(null);
+    setLoading(true);
+    mentorScore(week.site_id, week.year, week.week_number).then((res) => {
+      if (!live) return;
+      setResult(res.ok ? res.value : { status: "none" });
+      setLoading(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, week]);
+
+  if (!week) return null;
+
+  const days: MentorDay[] = result?.status === "ready" ? result.days : [];
+
+  return (
+    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
+        <Pressable className="max-h-[80%] rounded-t-3xl bg-white p-5" onPress={(e) => e.stopPropagation()}>
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-lg font-bold text-slate-900">Mentor Score</Text>
+          </View>
+
+          {loading ? (
+            <View className="items-center py-10">
+              <ActivityIndicator color="#4f46e5" />
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                <Text className="text-3xl font-bold text-indigo-900">{result?.status === "ready" ? (result.avgFico ?? "--") : "--"}</Text>
+                <Text className="mt-1 text-xs text-indigo-700">
+                  Average of {result?.status === "ready" ? (result.daysScored ?? 0) : 0} day
+                  {result?.status === "ready" && result.daysScored === 1 ? "" : "s"} this week
+                </Text>
+              </View>
+
+              {days.length > 0 && (
+                <View className="mt-3 gap-2">
+                  {days.map((d) => (
+                    <View key={d.date} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-sm font-semibold text-slate-700">{d.date}</Text>
+                        <Text className="text-lg font-bold text-slate-900">{d.fico_score ?? "--"}</Text>
+                      </View>
+                      <Text className="mt-1 text-xs text-slate-500">
+                        {d.hard_acceleration ?? 0} hard acceleration · {d.hard_braking ?? 0} hard braking · {d.hard_cornering ?? 0} hard cornering
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-slate-500">
+                        {d.distraction ?? 0} distraction · {d.phone_calls ?? 0} phone calls · {d.phone_manipulations ?? 0} phone manipulations · {d.speeding ?? 0} speeding
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
           )}
 
           <Pressable onPress={onClose} className="mt-5 items-center rounded-xl bg-slate-900 py-3">

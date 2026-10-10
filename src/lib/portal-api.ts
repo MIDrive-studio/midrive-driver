@@ -134,6 +134,50 @@ export async function performanceCoaching(metric: string, siteId: string, year: 
   return portalGet<PerformanceCoaching>(`/api/driver/performance-coaching?${params.toString()}`);
 }
 
+// A driver's own Mentor score for one week -- plain stored fact, no AI,
+// same "status" shape idea as coaching but for a different reason: "none"
+// here just means this week's safety data didn't come from Mentor (it was
+// Netradyne, or nothing could be attributed), which is the ordinary case
+// for most drivers, not a failure.
+export type MentorDay = {
+  date: string;
+  fico_score: number | null;
+  total_trips: number | null;
+  acceleration_rating: string | null;
+  hard_acceleration: number | null;
+  braking_rating: string | null;
+  hard_braking: number | null;
+  cornering_rating: string | null;
+  hard_cornering: number | null;
+  distraction_rating: string | null;
+  distraction: number | null;
+  phone_calls: number | null;
+  phone_calls_per_100mi: number | null;
+  phone_calls_per_100km: number | null;
+  phone_manipulations: number | null;
+  phone_manipulations_per_100mi: number | null;
+  phone_manipulations_per_100km: number | null;
+  speeding_rating: string | null;
+  speeding: number | null;
+  training_completed: string | null;
+};
+
+export type MentorScore =
+  | {
+      status: "ready";
+      avgFico: number | null;
+      daysScored: number | null;
+      daysExpected: number | null;
+      reviewStatus: string | null;
+      days: MentorDay[];
+    }
+  | { status: "none" };
+
+export async function mentorScore(siteId: string, year: number, weekNumber: number) {
+  const params = new URLSearchParams({ site_id: siteId, year: String(year), week_number: String(weekNumber) });
+  return portalGet<MentorScore>(`/api/driver/mentor-score?${params.toString()}`);
+}
+
 export type Reading = {
   document_number: string | null;
   expires_on: string | null;
