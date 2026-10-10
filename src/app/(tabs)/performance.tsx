@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { ScoreTrend } from "@/components/score-trend";
-import { performanceTips, type PerformanceTips } from "@/lib/portal-api";
+import { performanceCoaching, type PerformanceCoaching, type CoachingTip } from "@/lib/portal-api";
 import {
   DRIVER_METRICS,
   TIER_LABEL,
@@ -679,24 +679,26 @@ function MetricDetail({
   earned: Attainment | null;
   onClose: () => void;
 }) {
-  const [tips, setTips] = useState<PerformanceTips | null>(null);
-  const [tipsLoading, setTipsLoading] = useState(false);
+  const [coaching, setCoaching] = useState<PerformanceCoaching | null>(null);
+  const [coachingLoading, setCoachingLoading] = useState(false);
   const metricKey = spec?.key;
 
   useEffect(() => {
-    if (!metricKey) return;
+    if (!metricKey || !week) return;
     let live = true;
-    setTips(null);
-    setTipsLoading(true);
-    performanceTips(metricKey).then((result) => {
+    setCoaching(null);
+    setCoachingLoading(true);
+    // Always a plain read -- the model was already asked, on a schedule,
+    // long before this sheet opened. Nothing here waits on AI.
+    performanceCoaching(metricKey, week.site_id, week.year, week.week_number).then((result) => {
       if (!live) return;
-      setTips(result.ok ? result.value : null);
-      setTipsLoading(false);
+      setCoaching(result.ok ? result.value : { status: "pending" });
+      setCoachingLoading(false);
     });
     return () => {
       live = false;
     };
-  }, [metricKey]);
+  }, [metricKey, week]);
 
   if (!spec || !week) return null;
 
@@ -756,27 +758,48 @@ function MetricDetail({
             </View>
           )}
 
-          {tipsLoading && (
+          {coachingLoading && (
             <View className="mt-4 flex-row items-center gap-2">
               <ActivityIndicator size="small" color="#64748b" />
-              <Text className="text-xs text-slate-500">Finding tips…</Text>
+              <Text className="text-xs text-slate-500">Loading coaching…</Text>
             </View>
           )}
 
-          {!tipsLoading && tips && tips.tips.length > 0 && (
-            <View className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <Text className="text-sm font-bold text-blue-900">How to improve</Text>
-              {tips.tips.map((tip, index) => (
-                <View key={`${index}-${tip}`} className="mt-2 flex-row gap-2">
-                  <Text className="text-sm font-bold text-blue-700">{index + 1}.</Text>
-                  <Text className="flex-1 text-sm leading-5 text-slate-800">{tip}</Text>
-                </View>
-              ))}
-              {tips.sources.length > 0 && (
+          {!coachingLoading && coaching?.status === "ready" && coaching.state === "improve" && (
+            <View className="mt-4">
+              <Text className="text-base font-bold text-slate-900">Let&apos;s improve this 💪</Text>
+              {coaching.explanation && (
+                <Text className="mt-1 text-sm leading-5 text-slate-600">{coaching.explanation}</Text>
+              )}
+              <View className="mt-3 gap-2">
+                {coaching.tips.map((tip, index) => (
+                  <StaggeredTipCard key={`${index}-${tip.title}`} tip={tip} index={index} />
+                ))}
+              </View>
+              {coaching.sources.length > 0 && (
                 <Text className="mt-3 text-xs text-slate-500">
-                  From {[...new Set(tips.sources.map((s) => s.document))].join(", ")}
+                  From {[...new Set(coaching.sources.map((s) => s.document))].join(", ")}
                 </Text>
               )}
+            </View>
+          )}
+
+          {!coachingLoading && coaching?.status === "ready" && coaching.state === "max" && (
+            <CelebrationCard metricLabel={spec.label} />
+          )}
+
+          {!coachingLoading && coaching?.status === "ready" && coaching.state === "not_scored" && (
+            <View className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <Text className="text-sm font-semibold text-slate-700">Not scored this week</Text>
+            </View>
+          )}
+
+          {/* A brand-new week the schedule hasn't reached yet, most likely --
+              never shown as if there is simply nothing to say, and never
+              filled with guessed-at tips either. */}
+          {!coachingLoading && coaching && (coaching.status === "pending" || coaching.status === "failed") && (
+            <View className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <Text className="text-xs text-slate-500">Coaching for this week is being prepared. Check back soon.</Text>
             </View>
           )}
 
@@ -786,5 +809,65 @@ function MetricDetail({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+/**
+ * One coaching tip, entering a beat after the one before it rather than all
+ * at once -- a small thing, but a wall of advice landing in a single frame
+ * reads as a block of text no matter how it's styled, and reading it one
+ * card at a time is the point of cards at all.
+ */
+function StaggeredTipCard({ tip, index }: { tip: CoachingTip; index: number }) {
+  const [progress] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 280,
+      delay: index * 90,
+      useNativeDriver: true,
+    }).start();
+  }, [progress, index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: progress,
+        transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+      }}
+      className="rounded-xl border border-blue-100 bg-blue-50 p-4"
+    >
+      <View className="flex-row items-center gap-2">
+        <View className="h-6 w-6 items-center justify-center rounded-full bg-blue-600">
+          <Text className="text-xs font-bold text-white">{index + 1}</Text>
+        </View>
+        <Text className="flex-1 text-sm font-bold text-blue-900">{tip.title}</Text>
+      </View>
+      <Text className="mt-1.5 text-sm leading-5 text-slate-700">{tip.explanation}</Text>
+      <View className="mt-2 flex-row items-start gap-1.5">
+        <Feather name="arrow-right" size={13} color="#1d4ed8" style={{ marginTop: 2 }} />
+        <Text className="flex-1 text-sm font-semibold text-blue-800">{tip.action}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+/** A metric with nothing left to improve -- shown instead of tips, never alongside them. */
+function CelebrationCard({ metricLabel }: { metricLabel: string }) {
+  const [scale] = useState(() => new Animated.Value(0.6));
+
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 5 }).start();
+  }, [scale]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }} className="mt-4 items-center rounded-xl border border-emerald-100 bg-emerald-50 p-5">
+      <Text className="text-2xl">🎉</Text>
+      <Text className="mt-1 text-base font-bold text-emerald-900">Brilliant work!</Text>
+      <Text className="mt-1 text-center text-sm leading-5 text-emerald-800">
+        You achieved maximum points for {metricLabel} this week. Keep doing exactly what you&apos;re doing!
+      </Text>
+    </Animated.View>
   );
 }
