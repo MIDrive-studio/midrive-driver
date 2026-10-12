@@ -1,4 +1,5 @@
 import "react-native-url-polyfill/auto";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
@@ -16,4 +17,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+});
+
+// Supabase's own recommendation for React Native: the auto-refresh timer
+// keeps running even while the app is backgrounded or the phone is locked,
+// where the JS engine is suspended mid-refresh rather than failing cleanly.
+// Without this, a driver who locks their phone mid-session can come back to
+// every request -- including starting a vehicle check -- queuing behind a
+// refresh that never resolved, with nothing on screen to say why. This is
+// what a five-minute "Starting..." on the van check button turned out to be.
+AppState.addEventListener("change", (state) => {
+  if (state === "active") {
+    supabase.auth.startAutoRefresh();
+  } else {
+    supabase.auth.stopAutoRefresh();
+  }
 });

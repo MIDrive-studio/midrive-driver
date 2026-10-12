@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { checksForDate, isSubmitted, type CompletedCheck } from "@/lib/inspection";
+import { useInspectionSync } from "@/lib/inspection-sync";
 import { todayISODate } from "@/lib/dates";
 
 // The first thing a driver does in the morning, so it sits above everything
@@ -40,6 +41,7 @@ const RESULT: Record<string, string> = {
 export function VehicleCheckTile() {
   const router = useRouter();
   const [checks, setChecks] = useState<CompletedCheck[] | null>(null);
+  const { hasCompleteCheck, hasError, retry } = useInspectionSync();
 
   useFocusEffect(
     useCallback(() => {
@@ -69,8 +71,14 @@ export function VehicleCheckTile() {
   const done = checks.filter(isSubmitted);
   const inProgress = checks.find((check) => check.status === "in_progress");
 
+  // Finished locally but not yet confirmed by the server -- a driver who
+  // completed the walk-around with poor signal. See lib/inspection-sync.ts.
+  // From here it reads exactly like a done check, because to the driver it
+  // is one: nothing more is asked of them.
+  const pending = hasCompleteCheck(todayISODate());
+
   // Nothing today: the plain prompt.
-  if (done.length === 0) {
+  if (done.length === 0 && !pending) {
     return (
       <Pressable
         onPress={() => router.push("/vehicle-check")}
@@ -97,14 +105,40 @@ export function VehicleCheckTile() {
   }
 
   // Done: the log, and a quiet way to do another.
+  const total = done.length + (pending ? 1 : 0);
+
   return (
     <View className="mb-4 overflow-hidden rounded-xl border border-ok-line bg-surface">
       <View className="flex-row items-center gap-2 bg-ok-surface px-4 py-2.5">
         <Feather name="check-circle" size={16} color="#047857" />
         <Text className="flex-1 text-sm font-bold text-ok-strong">
-          {done.length === 1 ? "Vehicle check done" : `${done.length} vehicle checks done`}
+          {total === 1 ? "Vehicle check done" : `${total} vehicle checks done`}
         </Text>
       </View>
+
+      {pending && (
+        <Pressable
+          onPress={hasError ? retry : undefined}
+          accessibilityRole={hasError ? "button" : undefined}
+          accessibilityLabel={hasError ? "Couldn't send your vehicle check yet — tap to retry" : undefined}
+          className="flex-row items-center gap-3 border-t border-line px-4 py-3"
+        >
+          <Feather name="truck" size={15} color="#64748b" />
+          <View className="flex-1">
+            <Text className="text-base font-semibold text-ink">Today&apos;s van</Text>
+            <View className="mt-0.5 flex-row items-center gap-1.5">
+              {hasError ? (
+                <Text className="text-xs font-semibold text-warn-strong">Couldn&apos;t send yet — tap to retry</Text>
+              ) : (
+                <>
+                  <ActivityIndicator size="small" color="#64748b" />
+                  <Text className="text-xs text-ink-subtle">Still sending…</Text>
+                </>
+              )}
+            </View>
+          </View>
+        </Pressable>
+      )}
 
       {done.map((check) => (
         <View key={check.id} className="flex-row items-center gap-3 border-t border-line px-4 py-3">

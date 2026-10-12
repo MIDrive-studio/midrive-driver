@@ -5,20 +5,27 @@
 // this codebase has, and pretending otherwise would hide the coupling rather
 // than remove it. If one changes, all three change.
 
+// `guide` used to name one of five shapes, mirrored left-to-right for the
+// right-hand positions. It's now the position's own key for all eight photo
+// angles -- each has its own traced reference image (assets/van-outlines/),
+// not a flipped copy of its opposite number, since the reference set given
+// for this (front/front-3/4/side/rear-3/4/rear, left and right drawn
+// separately) was specific enough per side that mirroring stopped being
+// worth the fidelity it cost.
 export const POSITIONS = [
-  { key: "front", label: "Front", short: "Front", guide: "front", mirrored: false },
-  { key: "front_left", label: "Front Left", short: "Front L", guide: "three_quarter_front", mirrored: false },
-  { key: "left", label: "Left Side", short: "Left", guide: "side", mirrored: false },
-  { key: "rear_left", label: "Rear Left", short: "Rear L", guide: "three_quarter_rear", mirrored: false },
-  { key: "rear", label: "Rear", short: "Rear", guide: "rear", mirrored: false },
-  { key: "rear_right", label: "Rear Right", short: "Rear R", guide: "three_quarter_rear", mirrored: true },
-  { key: "right", label: "Right Side", short: "Right", guide: "side", mirrored: true },
-  { key: "front_right", label: "Front Right", short: "Front R", guide: "three_quarter_front", mirrored: true },
+  { key: "front", label: "Front", short: "Front", guide: "front" },
+  { key: "front_left", label: "Front Left", short: "Front L", guide: "front_left" },
+  { key: "left", label: "Left Side", short: "Left", guide: "left" },
+  { key: "rear_left", label: "Rear Left", short: "Rear L", guide: "rear_left" },
+  { key: "rear", label: "Rear", short: "Rear", guide: "rear" },
+  { key: "rear_right", label: "Rear Right", short: "Rear R", guide: "rear_right" },
+  { key: "right", label: "Right Side", short: "Right", guide: "right" },
+  { key: "front_right", label: "Front Right", short: "Front R", guide: "front_right" },
   // Last, because the driver finishes the lap back at the cab door and this is
   // the one shot they can take sitting down. It is also the only one that is
   // not a comparison: a dashboard photograph is read for what is lit up on it
   // today, not for what changed since yesterday.
-  { key: "dashboard", label: "Dashboard", short: "Dash", guide: "dashboard", mirrored: false },
+  { key: "dashboard", label: "Dashboard", short: "Dash", guide: "dashboard" },
 ] as const;
 
 export type InspectionPosition = (typeof POSITIONS)[number]["key"];
@@ -59,7 +66,6 @@ export type CapturedPhoto = {
   qualityScore: number;
   /** True when the driver was warned and used the photograph anyway. */
   overridden: boolean;
-  uploaded: boolean;
 };
 
 export type VehicleCheckContext = {

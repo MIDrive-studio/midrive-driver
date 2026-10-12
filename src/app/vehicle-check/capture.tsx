@@ -5,9 +5,11 @@ import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
+import { todayISODate } from "@/lib/dates";
 import { VanOutline } from "@/components/van-outline";
 import { useFramingGuidance } from "@/lib/framing-guidance";
-import { isPoorQuality, prepareCapture, uploadCapture } from "@/lib/inspection";
+import { isPoorQuality, prepareCapture } from "@/lib/inspection";
+import { enqueuePhoto, kickSync } from "@/lib/inspection-sync";
 import { useVehicleCheck } from "@/lib/vehicle-check-context";
 import { POSITIONS, POSITION_INSTRUCTIONS, POSITION_KEYS, type CapturedPhoto, type InspectionPosition } from "@/types/inspection";
 
@@ -18,16 +20,18 @@ import { POSITIONS, POSITION_INSTRUCTIONS, POSITION_KEYS, type CapturedPhoto, ty
 // shape. Everything else on screen is deliberately small -- which angle this
 // is, how far through you are, and one button.
 //
-// Each photograph is uploaded the moment it is accepted rather than all eight
-// at the end. A driver in a yard has patchy signal, and eight uploads at once
-// at the end is one long wait that can fail as a whole. Spread out, each upload
-// happens while the driver is walking to the next corner, and a failure is one
-// angle to retake rather than a lost walk-around.
+// Each photograph is queued for upload the moment it is accepted, and the
+// driver moves straight on to the next corner without waiting for it. A
+// driver in a yard has patchy signal, and waiting on nine round trips in a
+// row is exactly the kind of thing that leaves someone stuck watching a
+// spinner. The actual sending happens in the background -- see
+// lib/inspection-sync.ts -- on the spot if signal is good, the next time the
+// app is open if it was not. Nothing here needs to know which.
 
 export default function CaptureScreen() {
   const router = useRouter();
   const { driver } = useAuth();
-  const { inspectionId, vehicle, photos, setPhoto, markUploaded, activePosition, setActivePosition, capturedCount } =
+  const { inspectionId, vehicle, photos, setPhoto, activePosition, setActivePosition, capturedCount } =
     useVehicleCheck();
 
   const cameraRef = useRef<CameraView | null>(null);
@@ -89,15 +93,26 @@ export default function CaptureScreen() {
   }
 
   async function accept(photo: CapturedPhoto) {
-    if (!inspectionId || !driver) return;
+    if (!inspectionId || !driver || !vehicle) return;
 
     setSaving(true);
     setError(null);
 
     try {
       setPhoto(photo);
-      await uploadCapture(inspectionId, driver.company_id, photo);
-      markUploaded(photo.position);
+      await enqueuePhoto(
+        {
+          inspectionId,
+          driverId: driver.id,
+          companyId: driver.company_id,
+          siteId: driver.site_id,
+          vehicleId: vehicle.vehicle_id,
+          registration: vehicle.registration,
+          date: todayISODate(),
+        },
+        photo
+      );
+      kickSync();
       setPending(null);
 
       // `photos` here is the value from this render, which does not yet include
@@ -106,11 +121,12 @@ export default function CaptureScreen() {
       const remaining = POSITION_KEYS.filter((key) => key !== photo.position && !photos[key]);
       if (remaining.length === 0) router.push("/vehicle-check/review");
       else advance();
-    } catch (uploadError) {
-      // The photograph is kept in the walk-around either way. The review screen
-      // retries anything that did not make it, so a driver in a signal blackspot
-      // can finish the lap and let it catch up.
-      setError(`That photograph did not upload — ${(uploadError as Error).message}. Carry on; it will retry at the end.`);
+    } catch (queueError) {
+      // Only a local-storage failure reaches here -- enqueuePhoto writes to
+      // the phone, not the network. That is rare enough, and serious enough
+      // (there may be nowhere to keep the photograph at all), that it is
+      // worth stopping for rather than carrying on as if it were queued.
+      setError(`That photograph could not be saved — ${(queueError as Error).message}. Try again.`);
       setPending(null);
     }
 
@@ -266,15 +282,19 @@ export default function CaptureScreen() {
         </View>
 
         {/* The outline. This is the feature: look through the phone, move until
-            the real van fills the shape, press the button. */}
-        <View className="flex-1 items-center justify-center px-3" pointerEvents="none">
-          <View className="aspect-[1000/620] w-full">
+            the real van fills the shape, press the button.
+            Fills the whole space between the header and the controls --
+            no fixed aspect box around it. Each traced image keeps its own
+            true proportions via resizeMode="contain" regardless (a side
+            view and a front view are not the same shape), so this is purely
+            about using the height that was sitting empty before. */}
+        <View className="flex-1 items-center justify-center px-1 py-1" pointerEvents="none">
+          <View className="h-full w-full">
             <VanOutline
               shape={position.guide}
-              mirrored={position.mirrored}
-              colour="#ffffff"
+              colour={guidance.ok ? "#34d399" : "#ffffff"}
               strokeWidth={6}
-              opacity={guidance.ok ? 0.85 : 0.45}
+              opacity={guidance.ok ? 0.9 : 0.45}
             />
           </View>
         </View>
@@ -294,20 +314,20 @@ export default function CaptureScreen() {
               <Text className="text-sm font-semibold text-white">{guidance.message}</Text>
             </View>
 
-            <Text className="mt-2 px-6 text-center text-xs leading-5 text-white/85">
+            <Text className="mt-1 px-6 text-center text-xs leading-5 text-white/85">
               {POSITION_INSTRUCTIONS[position.key as InspectionPosition]}
             </Text>
           </View>
 
           {error && (
-            <View className="mt-3 rounded-xl bg-bad-strong/90 px-4 py-2.5">
+            <View className="mt-2 rounded-xl bg-bad-strong/90 px-4 py-2.5">
               <Text className="text-xs text-white">{error}</Text>
             </View>
           )}
 
           {/* Progress as eight dots rather than a bar: each one is an angle, and
               they are tappable so a driver can go back and redo one. */}
-          <View className="mt-4 flex-row justify-center gap-1.5">
+          <View className="mt-3 flex-row justify-center gap-1.5">
             {POSITIONS.map((option, at) => {
               const captured = Boolean(photos[option.key]);
               return (
@@ -325,7 +345,7 @@ export default function CaptureScreen() {
             })}
           </View>
 
-          <View className="mt-4 flex-row items-center justify-between px-4">
+          <View className="mt-3 flex-row items-center justify-between px-4">
             <View className="w-16">
               {done.length > 0 && (
                 <Pressable

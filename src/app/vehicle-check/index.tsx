@@ -141,9 +141,22 @@ export default function VehicleCheckStart() {
 
     try {
       const mileageValue = mileage.trim() === "" ? null : Number(mileage.replace(/[^\d]/g, ""));
-      const inspectionId = await startInspection(context.vehicle_id, today, mileageValue);
+
+      // Starting an inspection twice for the same van and date is safe --
+      // start_vehicle_inspection() updates the existing in_progress row
+      // rather than creating a second one -- so a timeout here can fail
+      // loudly and let the driver press the button again, rather than
+      // leaving them staring at "Starting..." with no way out because a
+      // request is stuck (a dead patch of signal on the round, or similar).
+      const inspectionId = await Promise.race([
+        startInspection(context.vehicle_id, today, mileageValue),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("That's taking too long -- check your signal and try again.")), 20_000)
+        ),
+      ]);
 
       begin(inspectionId, context);
+      setStarting(false);
       router.push("/vehicle-check/capture");
     } catch (startError) {
       setError((startError as Error).message);
@@ -310,7 +323,7 @@ export default function VehicleCheckStart() {
                   outline they are about to line the real one up with. */}
               <View className="items-center bg-marine-900 py-4">
                 <View className="h-28 w-full">
-                  <VanOutline shape="three_quarter_front" colour="#82aee1" strokeWidth={6} opacity={0.9} />
+                  <VanOutline shape="front_left" colour="#82aee1" strokeWidth={6} opacity={0.9} />
                 </View>
               </View>
 

@@ -1,10 +1,8 @@
-import { useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@/lib/auth-context";
-import { requestAnalysis, submitInspection, uploadCapture } from "@/lib/inspection";
+import { kickSync, markReadyToSubmit } from "@/lib/inspection-sync";
 import { useVehicleCheck } from "@/lib/vehicle-check-context";
 import { POSITIONS, POSITION_KEYS, type InspectionPosition } from "@/types/inspection";
 
@@ -17,49 +15,25 @@ import { POSITIONS, POSITION_KEYS, type InspectionPosition } from "@/types/inspe
 
 export default function ReviewScreen() {
   const router = useRouter();
-  const { driver } = useAuth();
-  const { inspectionId, vehicle, photos, capturedCount, markUploaded, setActivePosition } = useVehicleCheck();
-
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { inspectionId, vehicle, photos, capturedCount, setActivePosition } = useVehicleCheck();
 
   const missing = POSITION_KEYS.filter((key) => !photos[key]);
   const complete = missing.length === 0;
 
-  async function submit() {
-    if (!inspectionId || !driver || !complete) return;
+  // No "Sending..." screen, no spinner, no wait of any kind -- the driver
+  // taps this and is already on the next screen. Marking the walk-around
+  // ready and actually sending it (lib/inspection-sync.ts) are the queue's
+  // job from here, on the spot if signal is good, the next time the app is
+  // open if it was not; this function's only job is to not make them watch.
+  function submit() {
+    if (!inspectionId || !complete) return;
 
-    setSubmitting(true);
-    setError(null);
+    void markReadyToSubmit(inspectionId).then(kickSync);
 
-    try {
-      // Anything that failed to upload on the way round gets one more go here,
-      // where the driver is standing still and more likely to have signal than
-      // they were walking between corners.
-      for (const key of POSITION_KEYS) {
-        const photo = photos[key as InspectionPosition];
-        if (!photo || photo.uploaded) continue;
-
-        await uploadCapture(inspectionId, driver.company_id, photo);
-        markUploaded(photo.position);
-      }
-
-      await submitInspection(inspectionId);
-
-      // Deliberately not awaited. The analysis runs on the portal's own
-      // schedule whether or not this request ever lands, so making the driver
-      // wait on it would be making them wait on something that does not matter
-      // to them. Fired and forgotten; the catch inside it swallows failures.
-      void requestAnalysis(inspectionId);
-
-      router.replace({
-        pathname: "/vehicle-check/submitted",
-        params: { registration: vehicle?.registration ?? "" },
-      });
-    } catch (submitError) {
-      setError((submitError as Error).message);
-      setSubmitting(false);
-    }
+    router.replace({
+      pathname: "/vehicle-check/submitted",
+      params: { registration: vehicle?.registration ?? "" },
+    });
   }
 
   return (
@@ -142,27 +116,14 @@ export default function ReviewScreen() {
           </View>
         )}
 
-        {error && (
-          <View className="mt-4 rounded-xl border border-bad-line bg-bad-surface px-4 py-3">
-            <Text className="text-sm text-bad-strong">{error}</Text>
-          </View>
-        )}
-
         <Pressable
           onPress={complete ? submit : () => router.back()}
-          disabled={submitting}
           accessibilityRole="button"
-          className={`mt-5 flex-row items-center justify-center gap-2 rounded-xl px-5 py-4 ${
-            submitting ? "bg-marine-300" : complete ? "bg-marine-600 active:bg-marine-700" : "bg-marine-600 active:bg-marine-700"
-          }`}
+          className="mt-5 flex-row items-center justify-center gap-2 rounded-xl bg-marine-600 px-5 py-4 active:bg-marine-700"
         >
-          {submitting ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Feather name={complete ? "send" : "camera"} size={18} color="#ffffff" />
-          )}
+          <Feather name={complete ? "send" : "camera"} size={18} color="#ffffff" />
           <Text className="text-base font-bold text-white">
-            {submitting ? "Sending…" : complete ? "Submit vehicle check" : `Take the last ${missing.length}`}
+            {complete ? "Submit vehicle check" : `Take the last ${missing.length}`}
           </Text>
         </Pressable>
       </ScrollView>

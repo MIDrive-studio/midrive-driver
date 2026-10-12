@@ -27,7 +27,6 @@ type State = {
 type Value = State & {
   begin: (inspectionId: string, vehicle: Context) => void;
   setPhoto: (photo: CapturedPhoto) => void;
-  markUploaded: (position: InspectionPosition) => void;
   setActivePosition: (position: InspectionPosition) => void;
   reset: () => void;
   /** The first angle still missing, or null when the walk-around is complete. */
@@ -53,14 +52,6 @@ export function VehicleCheckProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, photos: { ...current.photos, [photo.position]: photo } }));
   }, []);
 
-  const markUploaded = useCallback((position: InspectionPosition) => {
-    setState((current) => {
-      const existing = current.photos[position];
-      if (!existing) return current;
-      return { ...current, photos: { ...current.photos, [position]: { ...existing, uploaded: true } } };
-    });
-  }, []);
-
   const setActivePosition = useCallback((activePosition: InspectionPosition) => {
     setState((current) => ({ ...current, activePosition }));
   }, []);
@@ -79,13 +70,12 @@ export function VehicleCheckProvider({ children }: { children: ReactNode }) {
       ...state,
       begin,
       setPhoto,
-      markUploaded,
       setActivePosition,
       reset,
       nextPosition,
       capturedCount: POSITION_KEYS.filter((key) => Boolean(state.photos[key])).length,
     };
-  }, [state, begin, setPhoto, markUploaded, setActivePosition, reset]);
+  }, [state, begin, setPhoto, setActivePosition, reset]);
 
   return <VehicleCheck.Provider value={value}>{children}</VehicleCheck.Provider>;
 }

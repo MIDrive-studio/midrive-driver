@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { whereToSend } from "@/lib/where-to-send";
 import { OutstandingDocumentsProvider, useOutstandingDocuments } from "@/lib/outstanding-documents";
+import { InspectionSyncProvider } from "@/lib/inspection-sync";
 import { registerForPushNotificationsAsync } from "@/lib/push-notifications";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -176,6 +177,7 @@ function RootNavigator() {
         <Stack.Screen name="documents-gate" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen name="accident" options={{ presentation: "modal" }} />
+        <Stack.Screen name="end-shift" options={{ presentation: "modal" }} />
         {/* Full screen rather than a modal: the camera fills the display and a
             modal sheet leaves a strip of the home screen showing round it. */}
         <Stack.Screen name="vehicle-check" options={{ presentation: "fullScreenModal" }} />
@@ -201,9 +203,13 @@ export default function RootLayout() {
           {/* One shared instance, not one per screen -- see
               outstanding-documents.tsx for why the gate screen and this
               layout's own redirect effect must never each hold a different
-              answer to "is anything still outstanding". */}
+              answer to "is anything still outstanding". The same reasoning
+              applies to InspectionSyncProvider: the home tile and the shift
+              card must never disagree about whether today's check is done. */}
           <OutstandingDocumentsProvider>
-            <RootNavigator />
+            <InspectionSyncProvider>
+              <RootNavigator />
+            </InspectionSyncProvider>
           </OutstandingDocumentsProvider>
         </AuthProvider>
       </SafeAreaProvider>

@@ -38,7 +38,7 @@ export default function SubmittedScreen() {
       <View className="flex-1 justify-center px-6">
         <View className="items-center">
           <View className="h-24 w-full max-w-xs">
-            <VanOutline shape="side" colour="#047857" strokeWidth={6} opacity={0.9} />
+            <VanOutline shape="left" colour="#047857" strokeWidth={6} opacity={0.9} />
           </View>
 
           <View className="mt-5 h-14 w-14 items-center justify-center rounded-full bg-ok-surface">

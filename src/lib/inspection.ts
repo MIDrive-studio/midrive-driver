@@ -71,7 +71,6 @@ export async function prepareCapture(
     bytes,
     qualityScore: qualityScore(bytes, resized.width, resized.height),
     overridden: false,
-    uploaded: false,
   };
 }
 
@@ -250,6 +249,7 @@ function todayISO(): string {
 
 export type CompletedCheck = {
   id: string;
+  vehicle_id: string;
   van_registration: string;
   status: string;
   submitted_at: string | null;
@@ -267,7 +267,7 @@ export type CompletedCheck = {
 export async function checksForDate(dateISO: string): Promise<CompletedCheck[]> {
   const { data, error } = await supabase
     .from("vehicle_inspections")
-    .select("id, van_registration, status, submitted_at, started_at, date")
+    .select("id, vehicle_id, van_registration, status, submitted_at, started_at, date")
     .eq("date", dateISO)
     .order("started_at", { ascending: false });
 
@@ -279,7 +279,7 @@ export async function checksForDate(dateISO: string): Promise<CompletedCheck[]> 
 export async function recentChecks(limit = 30): Promise<CompletedCheck[]> {
   const { data, error } = await supabase
     .from("vehicle_inspections")
-    .select("id, van_registration, status, submitted_at, started_at, date")
+    .select("id, vehicle_id, van_registration, status, submitted_at, started_at, date")
     .order("date", { ascending: false })
     .order("started_at", { ascending: false })
     .limit(limit);
