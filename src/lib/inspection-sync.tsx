@@ -133,6 +133,37 @@ export async function markReadyToSubmit(inspectionId: string): Promise<void> {
   await writeStore(store);
 }
 
+/**
+ * What's already durably queued for an inspection, in the shape the capture
+ * screen already understands -- so a check that resumes (same inspection id,
+ * start_vehicle_inspection reuses the existing in_progress row) can be seeded
+ * with what the driver has actually already done, rather than appearing to
+ * have nothing. Includes a photo that hasn't uploaded yet: a driver on bad
+ * signal did take it, and asking them to take it again because the network
+ * hasn't caught up is exactly the kind of wait this queue exists to remove.
+ */
+export async function queuedPhotosFor(inspectionId: string): Promise<Partial<Record<InspectionPosition, CapturedPhoto>>> {
+  const store = await readStore();
+  const check = store[inspectionId];
+  if (!check) return {};
+
+  const photos: Partial<Record<InspectionPosition, CapturedPhoto>> = {};
+  for (const position of Object.keys(check.photos) as InspectionPosition[]) {
+    const photo = check.photos[position];
+    if (!photo) continue;
+    photos[position] = {
+      position,
+      uri: photo.localUri,
+      width: photo.width,
+      height: photo.height,
+      bytes: photo.bytes,
+      qualityScore: photo.qualityScore,
+      overridden: photo.overridden,
+    };
+  }
+  return photos;
+}
+
 let inFlight: Promise<void> | null = null;
 
 /**

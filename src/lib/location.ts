@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { supabase } from "@/lib/supabase";
+import { classifyShiftRpcError } from "@/lib/shift-rpc-classify";
 
 export const LOCATION_TASK_NAME = "driver-location-task";
 const DRIVER_CONTEXT_KEY = "driver-location-context";
@@ -45,16 +46,6 @@ type RpcAttempt =
   | { kind: "network" }
   | { kind: "rejected"; reason: string };
 
-// Matched against start_shift()'s own exception text (see migration
-// 20261007000001) for the one rejection that isn't really a refusal: the
-// inspection row exists and belongs to this driver, its photos just haven't
-// all reached the server yet (submit_vehicle_inspection only runs client-side
-// once every upload has landed). A driver on bad signal gets exactly this
-// the instant their check auto-starts a shift -- treating it as final would
-// mean the walk-around they just finished still blocks their day on signal,
-// which is the one thing this whole file exists to avoid.
-const NOT_FINISHED_YET = "not finished yet";
-
 /**
  * Calls a shift RPC with a timeout, and -- the reason this isn't just
  * withTimeout() -- keeps apart the two ways it can fail. A Postgres
@@ -62,10 +53,12 @@ const NOT_FINISHED_YET = "not finished yet";
  * never a rejected promise, so it reaches here as `rejected`: the server
  * looked at this and said no, and retrying won't change that. Only a timeout
  * or the fetch itself throwing (no signal at all) counts as `network`: try
- * again once there's a chance of a different answer. NOT_FINISHED_YET is the
- * one exception to that: a definitive-looking rejection that is actually a
- * timing problem, not a refusal, so it is folded into `network` here rather
- * than at each call site, so start_shift and reconcileActiveShift agree.
+ * again once there's a chance of a different answer -- except for the one
+ * rejection classifyShiftRpcError() calls "retry" rather than "final" (the
+ * inspection hasn't fully reached the server yet, which isn't a refusal).
+ * That classification is folded in here, at the one place both start_shift
+ * and reconcileActiveShift's retries go through, so they can never disagree
+ * about which rejections are worth retrying.
  */
 async function callShiftRpc(fn: "start_shift" | "end_shift", args: Record<string, string>, ms: number): Promise<RpcAttempt> {
   try {
@@ -78,7 +71,7 @@ async function callShiftRpc(fn: "start_shift" | "end_shift", args: Record<string
 
     const { data, error } = result;
     if (error) {
-      if (error.message.includes(NOT_FINISHED_YET)) return { kind: "network" };
+      if (classifyShiftRpcError(error.message) === "retry") return { kind: "network" };
       return { kind: "rejected", reason: error.message };
     }
     return { kind: "ok", value: data as string };

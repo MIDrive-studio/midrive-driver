@@ -16,6 +16,7 @@ import {
   vehicleCheckContext,
   type CompletedCheck,
 } from "@/lib/inspection";
+import { queuedPhotosFor } from "@/lib/inspection-sync";
 import { useVehicleCheck } from "@/lib/vehicle-check-context";
 import { VanOutline } from "@/components/van-outline";
 import type { VehicleCheckContext } from "@/types/inspection";
@@ -155,7 +156,10 @@ export default function VehicleCheckStart() {
         ),
       ]);
 
-      begin(inspectionId, context);
+      // Same id a second time if a check for today was already under way
+      // (start_vehicle_inspection reuses the in_progress row) -- whatever
+      // was already queued for it belongs on screen, not silently dropped.
+      begin(inspectionId, context, await queuedPhotosFor(inspectionId));
       setStarting(false);
       router.push("/vehicle-check/capture");
     } catch (startError) {

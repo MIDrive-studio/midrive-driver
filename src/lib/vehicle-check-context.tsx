@@ -5,13 +5,19 @@ import { POSITION_KEYS } from "@/types/inspection";
 // The walk-around in progress: which van, which inspection, and the photographs
 // taken so far.
 //
-// Held in memory rather than written to AsyncStorage, unlike the accident
-// draft. The two look similar and are not: an accident report is filled in over
-// half an hour at a roadside, in a state where being interrupted is likely and
-// losing the work would be awful. A walk-around is eight photographs over two
-// minutes, and the photographs are already on the server the moment each one is
-// accepted -- so an app that dies mid-check resumes from the server on the next
-// start, which start_vehicle_inspection is written to do.
+// Held in memory rather than written to AsyncStorage directly, unlike the
+// accident draft -- but not actually lost if the app dies mid-check, because
+// begin() is never called with a blank slate for a check that was already
+// under way. lib/inspection-sync.ts's own durable queue is where a photo
+// really lives from the moment it's accepted (copied to disk, recorded,
+// uploaded whenever signal allows); vehicle-check/index.tsx reads that queue
+// for the inspection id start_vehicle_inspection() hands back -- which is the
+// same id a second time if one was already open for today -- and seeds begin()
+// with whatever is already there. Losing that seeding is exactly how a
+// driver who did seven of nine, got interrupted, and came back, would be
+// quietly sent round the van again missing two corners nobody told them
+// about -- which looks identical, from their side, to a walk-around that was
+// simply unfinished.
 
 type State = {
   inspectionId: string | null;
@@ -25,7 +31,7 @@ type State = {
 };
 
 type Value = State & {
-  begin: (inspectionId: string, vehicle: Context) => void;
+  begin: (inspectionId: string, vehicle: Context, alreadyQueued?: Partial<Record<InspectionPosition, CapturedPhoto>>) => void;
   setPhoto: (photo: CapturedPhoto) => void;
   setActivePosition: (position: InspectionPosition) => void;
   reset: () => void;
@@ -44,8 +50,13 @@ export function VehicleCheckProvider({ children }: { children: ReactNode }) {
     activePosition: "front",
   });
 
-  const begin = useCallback((inspectionId: string, vehicle: Context) => {
-    setState({ inspectionId, vehicle, photos: {}, activePosition: "front" });
+  const begin = useCallback((inspectionId: string, vehicle: Context, alreadyQueued: Partial<Record<InspectionPosition, CapturedPhoto>> = {}) => {
+    setState({
+      inspectionId,
+      vehicle,
+      photos: alreadyQueued,
+      activePosition: POSITION_KEYS.find((key) => !alreadyQueued[key]) ?? "front",
+    });
   }, []);
 
   const setPhoto = useCallback((photo: CapturedPhoto) => {

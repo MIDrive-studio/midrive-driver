@@ -56,7 +56,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:attainment": "node --test src/lib/performance.test.mjs",
-    "test:where-to-send": "node --test src/lib/where-to-send.test.mjs"
+    "test:where-to-send": "node --test src/lib/where-to-send.test.mjs",
+    "test:shift-rpc-classify": "node --test src/lib/shift-rpc-classify.test.mjs"
   },
   "private": true
 }
